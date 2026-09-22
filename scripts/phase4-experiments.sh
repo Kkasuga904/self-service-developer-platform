@@ -55,7 +55,7 @@ timestamp() { date -u +'%Y-%m-%dT%H:%M:%SZ'; }
 
 http_probe() {
   local namespace="$1" service="$2" port="$3"
-  kubectl -n "${namespace}" port-forward "service/${service}" "${port}:8080" \
+  kubectl -n "${namespace}" port-forward "service/${service}" "${port}:80" \
     >".phase4-state/${service}-port-forward.log" 2>&1 &
   local pf_pid=$!
   trap 'kill ${pf_pid} 2>/dev/null || true' RETURN
