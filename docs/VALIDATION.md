@@ -334,4 +334,197 @@ corroboration still observable, but live re-observation is impossible after
 the (completed, verified) destroy. The one directly re-observable hosted
 proof, GitHub OIDC, is PASS. Deliberately unvalidated: negative-branch OIDC
 test, billing figures, admission policy, observability, multi-team isolation,
-HA/failure injection (Phase 3+).
+HA/failure injection (addressed in Phase 3 below where stated).
+
+## Phase 3 validation (2026-09-22 JST, second disposable environment)
+
+Phase 3 implementation (commit `6ad432f`) was validated locally in full, then
+against a fresh disposable environment in `ap-northeast-1`
+(`developer-platform-dev`, EKS 1.35, `t3.medium` x2, 1 NAT, no RDS/LB/mesh/GPU).
+Account IDs are masked as `<masked-account>`. All timestamps JST unless noted.
+
+### P3-1. Local validation (all PASS, 2026-09-22 ~21:00-21:25 JST)
+
+Go 1.27.0, Terraform 1.14.3, Helm 3.18.6, kubeconform 0.6.7, Kyverno CLI
+v1.19.1, Trivy 0.74.0 (pinned temp downloads), kubectl 1.36.1, Docker.
+
+| Check | Command | Observed | Status |
+| --- | --- | --- | --- |
+| Go tests (all packages) | `go test ./...` | command, contract, gitops, goldenpath, guardrails ok | PASS |
+| Go vet | `go vet ./...` + sample-app | no findings | PASS |
+| Contract both teams | `platform validate services/...` x2 | PASS x2 (incl. environment/contact, digest pins) | PASS |
+| Terraform | fmt/init/validate | exit 0 / Success | PASS |
+| Helm lint/render both teams | lint x2, template x3 | 0 failed; payments 3, orders 3, HPA 4 resources | PASS |
+| kubeconform 1.35.0 | 3 rendered files | 10 valid, 0 invalid/errors/skipped | PASS |
+| Kyverno suite | `kyverno test policies/tests/` | 40 passed, 0 failed (cases A-E) | PASS |
+| Kustomize | `kubectl kustomize gitops/platform` | exit 0 | PASS |
+| Dashboard JSON | python json.load | valid | PASS |
+| Shell syntax | `bash -n` x5 scripts | exit 0 | PASS |
+| Trivy | fs HIGH,CRITICAL exit 1 | exit 0 (see disposition) | PASS |
+| Docker + /metrics | build, run, curl | HTTP 200, counter+histogram exposition verified | PASS |
+
+Trivy disposition: one HIGH (`KSV-0017`) fired on
+`policies/tests/invalid-privileged.yaml` — the intentional negative fixture
+(asserted REJECT by `kyverno test`). True positive on test data, not a
+product finding: the fixture directory is skipped (`--skip-dirs
+infra/.terraform,policies/tests`), documented in `local-validate.sh` and CI.
+A Helm-scanner warning also exposed that `charts/golden-path/values.yaml`
+(defaults) missed the new required `environment` key; fixed by adding it.
+
+### P3-2. Terraform plan review and apply
+
+- Status: **PASS**
+- Plan (2026-09-22 ~21:30 JST): `42 add / 0 change / 0 destroy` —
+  Phase 2 shape plus the carried-over node-to-API 443 SG rule. Verified: region
+  `ap-northeast-1`, EKS 1.35, `t3.medium` desired 2/max 3, 1 NAT + 1 EIP, 1
+  ECR (IMMUTABLE), CW log group 7d retention, project-owned OIDC
+  provider/role/policy, SG rules incl. the 443 fix. No RDS/LB/GPU/mesh.
+- Apply: `Apply complete! Resources: 42 added, 0 changed, 0 destroyed.`
+  No plan/apply drift. Two follow-up applies during validation added 2 rules
+  (`nodes_from_eks_managed_sg` 443/10250) then 1 port (`9443`); see P3-4.
+
+### P3-3. EKS and container image
+
+- Status: **PASS**
+- `eks list-clusters` shows `developer-platform-dev`; nodes 2/2 Ready
+  (`v1.35.8-eks-a887778`); add-ons `vpc-cni/coredns/kube-proxy` ACTIVE;
+  system Pods Running, 0 restarts (21:55 JST snapshot).
+- Image: `docker build` + push of two immutable tags (`payment-api-p3`,
+  `order-api-p3`), both digest
+  `sha256:b359742b13d36e0574dcfe492f38c6367c2e90c9ed7d0e4c23f6acc6c2fcfe05`;
+  both Service Definitions pinned to the digest (commit `d2e0b2a`), contract
+  validation PASS on both.
+
+### P3-4. Failure: admission webhook unreachable (new incident)
+
+- Symptom: `kubectl apply -f policies/kyverno/` failed on all 8 files:
+  `failed calling webhook "mutate-policy.kyverno.svc": ... context deadline exceeded`.
+- Investigation: kyverno-svc endpoints existed (`10.40.11.125:9443`),
+  controller Running; node SG allowed 443/10250 only from the custom cluster
+  SG, while control-plane ENIs carry the EKS-managed SG. First fix added
+  443/10250 from the managed SG (`vpc_config[0].cluster_security_group_id`) —
+  still failing. Second look: the webhook Pod serves **9443** (Service 443
+  maps to targetPort 9443), and pod-port traffic is filtered by the node SG.
+- Root cause: two gaps — (1) managed control-plane SG not admitted to nodes,
+  (2) webhook pod port 9443 not opened. Phase 2 never hit this because Argo CD
+  installs no admission webhooks.
+- Fix (commit `0dc91ba`): `nodes_from_eks_managed_sg` allowing
+  443/10250/9443 SG-to-SG from the EKS-managed cluster SG. No CIDR widening,
+  no `0.0.0.0/0`. Re-applied (2 + 1 adds), policies created: 8/8 Ready.
+- Re-validation: full admission battery P3-5. Security was not weakened to
+  route around the problem.
+- Note: the bootstrap script's version assertion initially read the wrong
+  label (`app.kubernetes.io/version` = chart version); corrected to assert
+  the deployment image tag (`:v1.19.1`).
+
+### P3-5. Policy admission (live)
+
+- Status: **PASS** (2026-09-22 ~21:45 JST)
+- Invalid Pods A-D via `kubectl apply --dry-run=server`: all REJECTED with
+  `admission webhook "validate.kyverno.svc-fail" denied the request`.
+- Valid Pod fixture: `created (server dry run)` (admitted).
+- Rendered valid `order-api` Deployment: PDB/Service/Deployment all
+  `created (server dry run)` — proves Kyverno autogen covers controllers.
+- Rendered Deployment with image rewritten to `nginx:latest`: PDB/Service
+  pass, Deployment REJECTED — autogen denial at the controller level.
+- Pre-existing workloads (deployed before policies) untouched; no background
+  scan noise (`background: false`).
+
+### P3-6. Multi-team and GitOps
+
+- Status: **PASS**
+- Argo CD 8.3.0 bootstrapped; `platform-root`, `payment-api`, `order-api`
+  all `Synced/Healthy` without manual intervention (namespace derivation
+  `team-{{owner}}` worked for both teams).
+- `team-payments/payment-api` 3/3 Ready, `team-orders/order-api` 2/2 Ready,
+  0 restarts, ClusterIP Services + PDBs present, live images digest-pinned
+  (`@sha256:b359...`).
+- `/healthz` via port-forward at 21:49 JST: both HTTP 200 body `ok`.
+
+### P3-7. RBAC boundary (live, impersonated SelfSubjectAccessReview)
+
+- Status: **PASS**
+- payments group in `team-payments`: `get deployments` yes, `get pods/log` yes.
+- payments group in `team-orders`: get deployments **no**, get pods **no**.
+- payments group `delete deployments` in own namespace: **no** (GitOps owns writes).
+- orders group: yes in `team-orders`, **no** in `team-payments`.
+- Subjects are IdP group names; no user credentials in Git.
+
+### P3-8. Observability (live, real traffic)
+
+- Status: **PASS** (2026-09-22 ~21:51-21:54 JST)
+- Stack: kube-prometheus-stack 91.4.1 installed with minimal values (no
+  Alertmanager); all pods Running; `golden-path-slo` PrometheusRule created.
+- Traffic: 120 requests to each service root (+ kubelet probes).
+- Prometheus (`up{job="golden-path"}`): 5/5 targets up with `service` label
+  (annotation scrape + relabeling works).
+- SLI queries against real data: request rate approx 0.41/s; availability
+  `= 1`; p95 approx 4.75ms (SLO: 99% within 500 ms — headroom confirmed live).
+- Grafana: `golden-path-overview` dashboard provisioned from Git (API search
+  + fetch: 5 panels, queries identical to the verified SLI queries).
+  Limitation: panel data verified via Prometheus API, not via in-browser
+  screenshot (no browser in the validation environment); the Grafana
+  `/api/ds/query` time-range plumbing was not cracked, recorded as a minor
+  tooling gap, not a platform gap.
+
+### P3-9. GitHub OIDC positive and negative
+
+- Status: **PASS**
+- Positive (main, run `35730184574`, all 7 jobs green incl. new `policy`
+  job): `sts get-caller-identity` assumed the validation role and
+  `describe-cluster` returned the live cluster — with the trust hardened to
+  `StringEquals` on the exact custom subject.
+- Negative (branch `tmp/oidc-negative`, run `35729948912`, workflow_dispatch):
+  subject `...:ref:refs/heads/tmp/oidc-negative` → `configure-aws-credentials`
+  retried and FAILED with access denied; no credentials issued. Branch deleted
+  locally and remotely afterwards. No wildcard was added; the design is
+  unchanged.
+- Post-destroy hygiene: `AWS_VALIDATION_ROLE_ARN` variable deleted again so
+  later runs skip the job instead of failing against the removed role.
+
+### P3-10. CI finding: cluster-dependent check in manifests job
+
+- Symptom: `kubectl apply --dry-run=client -f prometheus-rules.yaml` failed
+  in CI (`connection refused` — even client dry-run needs API discovery for
+  CRDs).
+- Fix (commit `ca1343e`): removed the kubectl line; rule content is asserted
+  in Go (`internal/guardrails`, runs in the `go` job). Re-run green.
+
+### P3-11. Destroy and residuals (2026-09-22 22:05-22:10 JST)
+
+- Status: **PASS**
+- Destroy plan: `0 add / 0 change / 45 destroy` (42 + 2 managed-SG rules +
+  1 port) — all project-owned. `Apply complete! ... 45 destroyed.`
+- `infra/terraform.tfstate`: 0 resources. `eks list-clusters`: empty.
+  Project VPC/subnets/NAT/EIP/ENI/SG/EBS/ECR/CW-logs/IAM-roles/OIDC-provider:
+  all absent (EC2 tombstones converged to none). No LoadBalancer was ever
+  created. No pre-existing AWS resource touched.
+
+### P3-12. Cost
+
+No billing-console measurement (limitation). About 1h-lived environment:
+EKS control plane, 2x `t3.medium`, 1 NAT + EIP, EBS, ECR, CloudWatch —
+plus the small monitoring/Kyverno/Argo CD footprints on the same nodes (no
+extra instances). No RDS/LB/GPU/mesh. No exact figure claimed.
+
+### Phase 3 verdict
+
+| Area | Status |
+| --- | --- |
+| Implementation (guardrails/multi-team/RBAC/observability/SLO/OIDC-neg) | PASS |
+| Local validation (existing + new) | PASS |
+| Real AWS infrastructure | PASS |
+| Policy admission | PASS |
+| Multi-team / GitOps / app | PASS |
+| RBAC boundary | PASS |
+| Observability / dashboard / SLI | PASS |
+| GitHub OIDC positive + negative | PASS |
+| Destroy | PASS |
+| Residual resource check | PASS |
+
+Remaining limitations: 30-day SLO compliance cannot be proven by a 1-hour
+cluster (queries evaluate, budget burn does not); Grafana panel rendering
+verified via API + Prometheus data, not screenshot; init/ephemeral containers
+outside policy scope; ClusterPolicy deprecation noted with ValidatingPolicy
+migration as follow-up; no log aggregation (by design); namespace is not a hard
+security boundary (documented).
