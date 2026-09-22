@@ -21,15 +21,28 @@ to avoid unjustified cost in this disposable environment. The CNI policy is
 attached to the node role in this MVP; a dedicated Pod Identity/IRSA role is a
 future hardening item.
 
+## Implemented in Phase 3 (added)
+
+- Kyverno admission (8 ClusterPolicies, Enforce) reusing the exact files CI
+  tests; exemptions are namespace-scoped to platform namespaces only;
+- per-team `Role`/`RoleBinding` (`team-developer`): read, pod logs and
+  port-forward inside the team's own namespace; no workload writes, no
+  cross-team access (GitOps owns desired state);
+- GitHub OIDC trust hardened from `StringLike` to `StringEquals` on the
+  exact custom subject; wildcard-free, guarded by a static CI test;
+- ownership labels (`owner`, `service`, `environment`, `managed-by`)
+  required by admission, rendered from the contract by the chart.
+
 ## Not implemented
 
-Kyverno admission rules, team RBAC, NetworkPolicy, secret delivery, image
-signature verification, vulnerability admission, dedicated break-glass access,
-and hostile tenant isolation are Phase 3 or production considerations.
+NetworkPolicy, secret delivery, image signature verification, vulnerability
+admission, dedicated break-glass access, and hostile tenant isolation remain
+production considerations. See MULTI_TENANCY.md for why namespaces are an
+administrative boundary, not a complete security boundary.
 
 ## CI vs Admission
 
 CI gives actionable feedback before merge. Admission is the final protection
-against direct API use or a bypassed pipeline. Phase 2 has contract validation
-and secure generated defaults, but no admission controller; this limitation is
-explicit rather than implied away.
+against direct API use or a bypassed pipeline. Phase 3 implements both from
+the same Kyverno files: `kyverno test` in CI is fast feedback, Enforce in the
+cluster is the final boundary. See docs/POLICIES.md.

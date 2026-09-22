@@ -4,11 +4,13 @@ metadata:
   name: developer-services
   namespace: argocd
 spec:
-  description: Phase 2 Golden Path services
+  description: Phase 3 Golden Path services (payments-team, orders-team)
   sourceRepos:
     - https://github.com/Kkasuga904/self-service-developer-platform.git
   destinations:
     - namespace: team-payments
+      server: https://kubernetes.default.svc
+    - namespace: team-orders
       server: https://kubernetes.default.svc
   clusterResourceWhitelist: []
   namespaceResourceWhitelist:

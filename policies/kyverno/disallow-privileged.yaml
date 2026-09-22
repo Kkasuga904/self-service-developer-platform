@@ -1,0 +1,50 @@
+# Platform guardrail: no privileged containers and no privilege escalation.
+# Golden Path sets allowPrivilegeEscalation=false by default; this policy is
+# the admission backstop for anyone bypassing CI or the chart.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: disallow-privileged
+  annotations:
+    policies.kyverno.io/title: Disallow privileged containers
+    policies.kyverno.io/severity: high
+spec:
+  background: false
+  validationFailureAction: Enforce
+  rules:
+    - name: no-privileged-containers
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              operations:
+                - CREATE
+                - UPDATE
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kube-public
+                - kube-node-lease
+                - argocd
+                - kyverno
+                - monitoring
+      validate:
+        message: "Privileged containers and privilege escalation are forbidden; use the Golden Path defaults."
+        foreach:
+          - list: request.object.spec.containers
+            deny:
+              conditions:
+                any:
+                  - key: "{{ element.securityContext.privileged || 'false' }}"
+                    operator: Equals
+                    value: true
+                  # No `||` default here: boolean false is falsy in JMESPath,
+                  # so a default would mask an explicit false. A missing field
+                  # evaluates to null, which is NotEquals false -> denied.
+                  # The Golden Path always renders allowPrivilegeEscalation.
+                  - key: "{{ element.securityContext.allowPrivilegeEscalation }}"
+                    operator: NotEquals
+                    value: false

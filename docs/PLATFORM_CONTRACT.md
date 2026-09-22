@@ -5,12 +5,14 @@
 | Field | Owner | Constraint |
 | --- | --- | --- |
 | `metadata.name` | Developer | Kubernetes DNS label |
-| `spec.owner` | Developer | Phase 2: `payments-team` only |
+| `spec.owner` | Developer | `payments-team` or `orders-team` (approved set) |
+| `spec.environment` | Developer | `dev` / `staging` / `prod` |
+| `spec.contact` | Developer | optional ownership identifier (≤128 chars) |
 | `spec.image` | Developer | digest or non-`latest` tag |
 | `spec.port` | Developer | 1–65535 |
 | `spec.resources.size` | Developer | small / medium / large |
 | `spec.availability.replicas` | Developer | 2–10 |
-| `spec.observability.enabled` | Developer | annotation only in Phase 2 |
+| `spec.observability.enabled` | Developer | enables `prometheus.io/*` scrape annotations consumed by the platform stack |
 | `spec.health.*Path` | Developer | optional HTTP paths |
 | `spec.autoscaling` | Developer | optional, bounded values |
 | generated Pod security/resources | Platform | not overridable |
@@ -27,8 +29,10 @@ changes require an ADR, migration notes and coordinated CLI/chart/schema updates
 ## Escape hatch
 
 No raw PodSpec or arbitrary manifest injection exists. A requested exception is
-evaluated as a typed field with a safe bounded domain. Time-limited policy
-exceptions are a Phase 3 design topic, not an implemented capability.
+evaluated as a typed field with a safe bounded domain. Time-limited
+PolicyExceptions remain unevaluated by design: every exemption must be a
+namespace-scoped platform decision (see POLICIES.md), not a developer
+self-grant.
 
 ## Responsibilities
 

@@ -1,0 +1,34 @@
+# Case C fixture: missing resource requests/limits. Must be REJECTED by require-resources.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: invalid-resources
+  namespace: team-payments
+  labels:
+    platform.example.io/owner: payments-team
+    platform.example.io/service: payment-api
+    platform.example.io/environment: dev
+    app.kubernetes.io/managed-by: Helm
+spec:
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: application
+      image: ghcr.io/example/payment-api:v1.2.3
+      ports:
+        - containerPort: 8080
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+        readOnlyRootFilesystem: true
+      readinessProbe:
+        httpGet:
+          path: /readyz
+          port: 8080
+      livenessProbe:
+        httpGet:
+          path: /healthz
+          port: 8080

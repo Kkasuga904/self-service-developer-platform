@@ -4,6 +4,8 @@ metadata:
   name: example-service
 spec:
   owner: payments-team
+  environment: dev
+  contact: payments-team@example.com
   image: ghcr.io/example/example-service:v0.1.0
   port: 8080
   resources:

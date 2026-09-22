@@ -34,8 +34,11 @@ team from rebuilding undifferentiated deployment machinery.
 ## Security and velocity
 
 Early CI feedback is valuable but cannot protect the cluster from bypasses.
-Admission control is therefore planned for Phase 3. It is not prematurely
-installed in Phase 2 merely to increase the tool count.
+Phase 3 adds Kyverno admission reusing the exact CI-tested files, so the two
+layers cannot drift. Legacy `ClusterPolicy` (rather than CEL
+`ValidatingPolicy`) is used because Pod autogen covers Deployments without
+extra plumbing for eight rules; upstream deprecates it in v1.19, so migration
+to `ValidatingPolicy` is the recorded follow-up, not ignored debt.
 
 ## Disposable cost and availability
 

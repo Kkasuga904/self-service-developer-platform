@@ -1,0 +1,46 @@
+# Platform guardrail: every container must expose readiness and liveness
+# probes. The Golden Path always renders both from the contract (with safe
+# path defaults), so a workload missing them bypassed the platform.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-probes
+  annotations:
+    policies.kyverno.io/title: Require readiness and liveness probes
+    policies.kyverno.io/severity: medium
+spec:
+  background: false
+  validationFailureAction: Enforce
+  rules:
+    - name: health-probes
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              operations:
+                - CREATE
+                - UPDATE
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kube-public
+                - kube-node-lease
+                - argocd
+                - kyverno
+                - monitoring
+      validate:
+        message: "readinessProbe and livenessProbe are required on every container; use the Golden Path."
+        foreach:
+          - list: request.object.spec.containers
+            deny:
+              conditions:
+                any:
+                  - key: "{{ element.readinessProbe || '' }}"
+                    operator: Equals
+                    value: ""
+                  - key: "{{ element.livenessProbe || '' }}"
+                    operator: Equals
+                    value: ""

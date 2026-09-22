@@ -6,6 +6,7 @@
 terraform.tfvars
 /platform
 /platform.exe
-/rendered.yaml
+/rendered-payments.yaml
+/rendered-orders.yaml
 /rendered-hpa.yaml
 .DS_Store

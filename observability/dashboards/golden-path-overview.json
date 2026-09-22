@@ -1,0 +1,70 @@
+{
+  "uid": "golden-path-overview",
+  "title": "Golden Path Overview",
+  "tags": ["platform"],
+  "timezone": "utc",
+  "schemaVersion": 39,
+  "version": 1,
+  "panels": [
+    {
+      "id": 1,
+      "title": "Request rate (req/s)",
+      "type": "timeseries",
+      "datasource": "${DS_PROMETHEUS}",
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total[5m]))",
+          "legendFormat": "requests/s"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Error rate",
+      "type": "timeseries",
+      "datasource": "${DS_PROMETHEUS}",
+      "targets": [
+        {
+          "expr": "sum(rate(http_request_errors_total[5m])) / sum(rate(http_requests_total[5m]))",
+          "legendFormat": "errors / requests"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Latency p95",
+      "type": "timeseries",
+      "datasource": "${DS_PROMETHEUS}",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95 seconds"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Availability (5m)",
+      "type": "stat",
+      "datasource": "${DS_PROMETHEUS}",
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total{code!~\"5..\"}[5m])) / sum(rate(http_requests_total[5m]))",
+          "legendFormat": "availability"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Workload health (ready replicas)",
+      "type": "stat",
+      "datasource": "${DS_PROMETHEUS}",
+      "targets": [
+        {
+          "expr": "sum(kube_deployment_status_replicas_available{namespace=~\"team-.*\"})",
+          "legendFormat": "ready"
+        }
+      ]
+    }
+  ]
+}

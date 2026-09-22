@@ -1,0 +1,43 @@
+# Platform guardrail: every workload must carry ownership metadata so the
+# platform always knows who owns a running service. The Golden Path renders
+# all four labels from the Service Definition; hand-written workloads without
+# them are rejected. (`managed-by` uses the standard Kubernetes label.)
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-owner-labels
+  annotations:
+    policies.kyverno.io/title: Require platform ownership labels
+    policies.kyverno.io/severity: medium
+spec:
+  background: false
+  validationFailureAction: Enforce
+  rules:
+    - name: ownership-labels
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              operations:
+                - CREATE
+                - UPDATE
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kube-public
+                - kube-node-lease
+                - argocd
+                - kyverno
+                - monitoring
+      validate:
+        message: "Missing platform ownership labels: platform.example.io/owner, platform.example.io/service, platform.example.io/environment, app.kubernetes.io/managed-by."
+        pattern:
+          metadata:
+            labels:
+              platform.example.io/owner: "?*"
+              platform.example.io/service: "?*"
+              platform.example.io/environment: "?*"
+              app.kubernetes.io/managed-by: "?*"

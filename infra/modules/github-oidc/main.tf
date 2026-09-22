@@ -25,10 +25,12 @@ resource "aws_iam_role" "github" {
       Principal = { Federated = local.provider_arn }
       Action    = "sts:AssumeRoleWithWebIdentity"
       Condition = {
+        # Exact match only. The value carries the account-specific custom
+        # subject (owner/repository IDs); StringLike without wildcards would
+        # behave the same today but invites future wildcard widening, so the
+        # operator is pinned to StringEquals and guarded by a CI test.
         StringEquals = {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-        }
-        StringLike = {
           "token.actions.githubusercontent.com:sub" = local.oidc_subject
         }
       }

@@ -1,0 +1,36 @@
+# Case D fixture: missing ownership metadata. Must be REJECTED by require-owner-labels.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: invalid-labels
+  namespace: team-payments
+spec:
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: application
+      image: ghcr.io/example/payment-api:v1.2.3
+      ports:
+        - containerPort: 8080
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+        readOnlyRootFilesystem: true
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 500m
+          memory: 256Mi
+      readinessProbe:
+        httpGet:
+          path: /readyz
+          port: 8080
+      livenessProbe:
+        httpGet:
+          path: /healthz
+          port: 8080

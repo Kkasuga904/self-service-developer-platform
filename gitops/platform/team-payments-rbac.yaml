@@ -1,0 +1,48 @@
+# Payments-team developer access. Read-only plus logs and port-forward for
+# local health checks. No write access to workload objects (GitOps owns them)
+# and no access to any other team's namespace. Subjects are IdP group names;
+# map them to the corporate identity provider out of band.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: team-developer
+  namespace: team-payments
+  labels:
+    platform.example.io/owner: payments-team
+    app.kubernetes.io/managed-by: argocd
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["services", "pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/portforward"]
+    verbs: ["create"]
+  - apiGroups: ["autoscaling"]
+    resources: ["horizontalpodautoscalers"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["policy"]
+    resources: ["poddisruptionbudgets"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: team-developer
+  namespace: team-payments
+  labels:
+    platform.example.io/owner: payments-team
+    app.kubernetes.io/managed-by: argocd
+subjects:
+  - kind: Group
+    name: platform-payments-developers
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: team-developer
+  apiGroup: rbac.authorization.k8s.io

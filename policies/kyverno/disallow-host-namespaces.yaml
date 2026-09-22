@@ -1,0 +1,46 @@
+# Platform guardrail: no host namespaces (hostNetwork, hostPID, hostIPC).
+# Pods sharing the node network or PID/IPC namespaces break team isolation.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: disallow-host-namespaces
+  annotations:
+    policies.kyverno.io/title: Disallow host namespaces
+    policies.kyverno.io/severity: high
+spec:
+  background: false
+  validationFailureAction: Enforce
+  rules:
+    - name: no-host-namespaces
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              operations:
+                - CREATE
+                - UPDATE
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kube-public
+                - kube-node-lease
+                - argocd
+                - kyverno
+                - monitoring
+      validate:
+        message: "Host namespaces (hostNetwork, hostPID, hostIPC) are forbidden by the platform."
+        deny:
+          conditions:
+            any:
+              - key: "{{ request.object.spec.hostNetwork || 'false' }}"
+                operator: Equals
+                value: true
+              - key: "{{ request.object.spec.hostPID || 'false' }}"
+                operator: Equals
+                value: true
+              - key: "{{ request.object.spec.hostIPC || 'false' }}"
+                operator: Equals
+                value: true

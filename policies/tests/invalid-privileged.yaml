@@ -1,0 +1,42 @@
+# Case B fixture: privileged container. Must be REJECTED by disallow-privileged-host.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: invalid-privileged
+  namespace: team-payments
+  labels:
+    platform.example.io/owner: payments-team
+    platform.example.io/service: payment-api
+    platform.example.io/environment: dev
+    app.kubernetes.io/managed-by: Helm
+spec:
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: application
+      image: ghcr.io/example/payment-api:v1.2.3
+      ports:
+        - containerPort: 8080
+      securityContext:
+        privileged: true
+        allowPrivilegeEscalation: true
+        capabilities:
+          drop: ["ALL"]
+        readOnlyRootFilesystem: true
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 500m
+          memory: 256Mi
+      readinessProbe:
+        httpGet:
+          path: /readyz
+          port: 8080
+      livenessProbe:
+        httpGet:
+          path: /healthz
+          port: 8080

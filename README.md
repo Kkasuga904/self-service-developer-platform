@@ -3,9 +3,10 @@
 > Personal implementation. A real AWS/EKS validation run was performed on
 > 2026-09-22 JST against a disposable environment (EKS 1.35, `t3.medium` x2,
 > single NAT, no RDS/LoadBalancer/mesh/GPU) and fully destroyed afterwards
-> with zero residual project resources. Evidence, partial-scope limits, and
-> failure records are in [docs/VALIDATION.md](docs/VALIDATION.md). This is not
-> production operation experience and is not described as production-ready.
+> with zero residual project resources. Phase 3 adds guardrails, a second
+> team, RBAC and observability; see [docs/VALIDATION.md](docs/VALIDATION.md)
+> for what is validated vs. assumed. This is not production operation
+> experience and is not described as production-ready.
 
 This personal portfolio explores a Platform Engineering product: a small,
 reviewable contract that lets an application developer request a safe standard
@@ -35,9 +36,12 @@ autoscaling choices.
 
 | Capability | Implementation | Validation |
 | --- | --- | --- |
-| Service Definition v1alpha1 | Implemented | See validation record |
+| Service Definition v1alpha1 | Implemented (owner, environment, contact) | See validation record |
 | Go CLI: create-service / validate / doctor | Implemented | See validation record |
 | Golden Path Helm chart | Implemented | See validation record |
+| Kyverno guardrails (8 ClusterPolicies) | Implemented, CI + admission share files | `kyverno test` cases A–E; live admission in EKS validation |
+| Multi-team (payments, orders) + RBAC | Implemented | Structural Go tests; live `can-i` in EKS validation |
+| Observability (Prometheus/Grafana, dashboard, SLO) | Implemented, minimal stack | Manifest/JSON tests; live data in EKS validation |
 | Terraform VPC/EKS/IAM/ECR foundation | Implemented as code | Real AWS apply + verified destroy on 2026-09-22; live transcript PARTIAL post-destroy, residuals PASS |
 | Argo CD root Application/ApplicationSet | Implemented as manifests | Reconciled in the validation cluster (first session); live state PARTIAL post-destroy |
 | Sample application | Implemented, ECR digest-pinned | Image built/pushed immutable in validation; in-cluster `/healthz` PARTIAL post-destroy, local container PASS |
@@ -77,6 +81,8 @@ make build
 ./platform create-service \
   --name payment-api \
   --owner payments-team \
+  --environment dev \
+  --contact payments-team@example.com \
   --image ghcr.io/acme/payment-api:v1.2.3 \
   --port 8080
 ./platform validate services/payments-team/payment-api/service.yaml
@@ -85,9 +91,10 @@ make build
 The CLI refuses unknown owners, invalid names, `latest` or untagged images,
 invalid sizes, ports, and replica counts. It never overwrites an existing file.
 The developer reviews the generated YAML, commits it, and opens a PR. CI renders
-the Golden Path. After merge, Argo CD is intended to create one Application per
-service and reconcile it; that end-to-end path remains unvalidated until the
-explicit EKS validation step.
+the Golden Path and runs the Kyverno guardrail suite (cases A–E) against
+Pod-level fixtures; after merge, Argo CD creates one Application per service
+and reconciles it, while admission enforces the same policies on anything
+applied directly.
 
 The committed sample uses `ghcr.io/example/payment-api:v0.1.0` as a contract
 example, not as a claimed deployable artifact. Before EKS validation it must be
@@ -200,9 +207,15 @@ create-then-destroy cycle of the disposable AWS environment (destroy and
 residual checks PASS, verified via AWS APIs). Live-cluster behavior (EKS
 internals, app reachability, GitOps sync, drift recovery) was exercised during
 the run and is recorded as PARTIAL because the environment was destroyed as
-required, so it cannot be re-observed. Unvalidated or unimplemented: negative
-OIDC tests, billing figures, admission policy, two-team isolation,
-observability, SLO measurement, and failure scenarios, as marked above and in
-the validation record.
+required, so it cannot be re-observed. Phase 3 adds guardrails, a second team
+with RBAC, and observability with an SLO hypothesis: locally validated and,
+where stated in the validation record, verified on a fresh disposable
+cluster. Unvalidated or unimplemented: negative OIDC tests (unless recorded),
+billing figures, admission policy exceptions, log aggregation, multi-team
+isolation beyond namespaces/RBAC, observability, SLO measurement over time,
+and failure scenarios, as marked in the validation record.
 
-It is not described as production-ready.
+It is not described as production-ready. Prohibited phrases for this repo:
+production-proven, enterprise-ready, battle-tested, production Kubernetes
+operation experience. Accurate phrases: production-oriented, validated in a
+disposable EKS environment, intentionally scoped, limitations documented.

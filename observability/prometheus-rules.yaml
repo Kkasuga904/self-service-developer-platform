@@ -1,0 +1,34 @@
+# Baseline platform alerts for Golden Path services. Thresholds implement
+# docs/SLO.md (5% error budget burn over 5m, target disappearance). Routing
+# is intentionally absent in the disposable environment (no Alertmanager);
+# alerts are observed in the Prometheus and Grafana UIs during validation.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: golden-path-slo
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/managed-by: platform
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: golden-path.slo
+      interval: 30s
+      rules:
+        - alert: GoldenPathHighErrorRate
+          expr: |
+            sum(rate(http_request_errors_total[5m]))
+              / sum(rate(http_requests_total[5m])) > 0.05
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Golden Path error rate above 5% over 5m"
+        - alert: GoldenPathTargetDown
+          expr: |
+            up{job="golden-path"} == 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Golden Path scrape target down for 5m"

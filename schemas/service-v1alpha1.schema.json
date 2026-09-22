@@ -17,9 +17,11 @@
     "spec": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["owner", "image", "port", "resources", "availability", "observability"],
-      "properties": {
-        "owner": { "enum": ["payments-team"] },
+        "required": ["owner", "environment", "image", "port", "resources", "availability", "observability"],
+        "properties": {
+          "owner": { "enum": ["payments-team", "orders-team"] },
+          "environment": { "enum": ["dev", "staging", "prod"] },
+          "contact": { "type": "string", "minLength": 1, "maxLength": 128 },
         "image": { "type": "string", "minLength": 1 },
         "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
         "resources": {

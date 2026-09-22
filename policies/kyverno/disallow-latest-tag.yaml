@@ -1,0 +1,46 @@
+# Platform guardrail: images must be pinned. `latest` and untagged references
+# are rejected; digest references (used by the real deployment path) pass
+# because a digest is the strongest form of pinning.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: disallow-latest-tag
+  annotations:
+    policies.kyverno.io/title: Disallow latest and untagged images
+    policies.kyverno.io/severity: high
+spec:
+  background: false
+  validationFailureAction: Enforce
+  rules:
+    - name: pinned-image
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              operations:
+                - CREATE
+                - UPDATE
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kube-public
+                - kube-node-lease
+                - argocd
+                - kyverno
+                - monitoring
+      validate:
+        message: "Images tagged latest or without a tag/digest are forbidden; pin an immutable tag or digest."
+        foreach:
+          - list: request.object.spec.containers
+            deny:
+              conditions:
+                any:
+                  - key: "{{ element.image }}"
+                    operator: AnyIn
+                    value: ["*latest*"]
+                  - key: "{{ element.image }}"
+                    operator: AllNotIn
+                    value: ["*:*", "*@*"]

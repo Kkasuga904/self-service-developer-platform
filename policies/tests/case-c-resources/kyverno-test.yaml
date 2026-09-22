@@ -1,0 +1,66 @@
+# Case C: missing resource requests/limits must be REJECTED by
+# require-resources and pass every other policy.
+apiVersion: kyverno.io/v1
+kind: Test
+metadata:
+  name: case-c-resources
+policies:
+  - ../../kyverno/disallow-host-namespaces.yaml
+  - ../../kyverno/disallow-privileged.yaml
+  - ../../kyverno/require-run-as-non-root.yaml
+  - ../../kyverno/restrict-capabilities.yaml
+  - ../../kyverno/require-resources.yaml
+  - ../../kyverno/disallow-latest-tag.yaml
+  - ../../kyverno/require-owner-labels.yaml
+  - ../../kyverno/require-probes.yaml
+resources:
+  - ../invalid-resources.yaml
+results:
+  - policy: require-resources
+    rule: cpu-memory-requests-limits
+    resources:
+      - invalid-resources
+    kind: Pod
+    result: fail
+  - policy: disallow-host-namespaces
+    rule: no-host-namespaces
+    resources:
+      - invalid-resources
+    kind: Pod
+    result: pass
+  - policy: disallow-privileged
+    rule: no-privileged-containers
+    resources:
+      - invalid-resources
+    kind: Pod
+    result: pass
+  - policy: require-run-as-non-root
+    rule: run-as-non-root
+    resources:
+      - invalid-resources
+    kind: Pod
+    result: pass
+  - policy: restrict-capabilities
+    rule: drop-all-capabilities
+    resources:
+      - invalid-resources
+    kind: Pod
+    result: pass
+  - policy: disallow-latest-tag
+    rule: pinned-image
+    resources:
+      - invalid-resources
+    kind: Pod
+    result: pass
+  - policy: require-owner-labels
+    rule: ownership-labels
+    resources:
+      - invalid-resources
+    kind: Pod
+    result: pass
+  - policy: require-probes
+    rule: health-probes
+    resources:
+      - invalid-resources
+    kind: Pod
+    result: pass

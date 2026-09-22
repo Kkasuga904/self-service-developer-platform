@@ -7,6 +7,8 @@ app.kubernetes.io/name: {{ include "golden-path.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 platform.example.io/owner: {{ .Values.spec.owner }}
+platform.example.io/service: {{ .Values.metadata.name }}
+platform.example.io/environment: {{ .Values.spec.environment }}
 platform.example.io/contract-version: v1alpha1
 {{- end }}
 

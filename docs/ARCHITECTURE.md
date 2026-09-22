@@ -28,6 +28,8 @@ sequenceDiagram
 ```
 
 Only the local part through render validation has been exercised in Phase 2.
+Phase 3 adds policy admission, a second team and cluster monitoring to the
+same flow; the sequence is unchanged.
 
 ## Ownership boundaries
 
@@ -35,9 +37,13 @@ Only the local part through render validation has been exercised in Phase 2.
 | --- | --- | --- |
 | VPC, EKS, node group, IAM, sample ECR | Platform | Terraform |
 | Argo CD initial installation | Platform bootstrap | Helm command |
-| Namespace, AppProject, ApplicationSet | Platform | Argo CD root Application |
+| Kyverno, monitoring stack | Platform bootstrap | Helm commands (pinned charts) |
+| Namespace, RBAC, AppProject, ApplicationSet | Platform | Argo CD root Application |
+| Guardrail definitions | Platform | Kyverno files, CI-tested and admission-enforced |
+| Standard dashboard, baseline alerts | Platform | Git-managed JSON / PrometheusRule |
 | Workload templates | Platform | Golden Path chart |
 | Service intent and app image | Application team | Service Definition |
+| Business metrics, service SLI targets | Application team | App instrumentation |
 | Runtime reconciliation | Argo CD | Git desired state |
 
 Argo CD is not installed through Terraform because that would couple cluster
@@ -48,6 +54,6 @@ accepted and documented.
 
 An Argo CD outage stops reconciliation and deployment visibility but does not
 terminate already-running workloads. A broken service definition should affect
-one generated Application. The Phase 2 AppProject restricts generated workloads
-to `team-payments` and four namespaced resource kinds. Admission enforcement and
-network boundaries remain Phase 3 work.
+one generated Application. The AppProject restricts generated workloads to the
+two team namespaces and four namespaced resource kinds. Namespaces are an
+administrative boundary, not a hard security boundary (see MULTI_TENANCY.md).

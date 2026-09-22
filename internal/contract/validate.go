@@ -11,6 +11,11 @@ var dnsLabel = regexp.MustCompile(`^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?$`)
 
 var approvedOwners = map[string]string{
 	"payments-team": "team-payments",
+	"orders-team":   "team-orders",
+}
+
+var environments = map[string]struct{}{
+	"dev": {}, "staging": {}, "prod": {},
 }
 
 var resourceSizes = map[string]struct{}{
@@ -30,6 +35,14 @@ func Validate(service Service) []error {
 	}
 	if _, ok := approvedOwners[service.Spec.Owner]; !ok {
 		errors = append(errors, fmt.Errorf("spec.owner %q is not approved; allowed: %s", service.Spec.Owner, strings.Join(ApprovedOwners(), ", ")))
+	}
+	if _, ok := environments[service.Spec.Environment]; !ok {
+		errors = append(errors, fmt.Errorf("spec.environment %q is not approved; allowed: dev, staging, prod", service.Spec.Environment))
+	}
+	if service.Spec.Contact != "" {
+		if len(service.Spec.Contact) > 128 || strings.TrimSpace(service.Spec.Contact) == "" {
+			errors = append(errors, fmt.Errorf("spec.contact must be a non-blank ownership identifier of at most 128 characters"))
+		}
 	}
 	if service.Spec.Image == "" {
 		errors = append(errors, fmt.Errorf("spec.image is required"))

@@ -1,0 +1,62 @@
+# Minimal values for kube-prometheus-stack (chart 91.4.1, pinned in
+# scripts/bootstrap-observability.sh) on the disposable validation cluster.
+# Only what the platform needs: Prometheus with a short retention, Grafana
+# with dashboard sidecar, kube-state-metrics and node-exporter for workload
+# and node health. Alertmanager is intentionally disabled: baseline alerts
+# are defined as PrometheusRules (visible in Prometheus/Grafana) but this
+# personal validation environment has no paging route.
+alertmanager:
+  enabled: false
+
+grafana:
+  enabled: true
+  defaultDashboardsEnabled: false
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+
+kube-state-metrics:
+  enabled: true
+
+prometheus-node-exporter:
+  enabled: true
+
+prometheus:
+  enabled: true
+  prometheusSpec:
+    retention: 6h
+    resources:
+      requests:
+        cpu: 250m
+        memory: 1Gi
+      limits:
+        cpu: "1"
+        memory: 2Gi
+    # Scrape Golden Path pods through the portable prometheus.io annotations
+    # rendered by charts/golden-path, so the chart stays operator-agnostic
+    # (no ServiceMonitor CRD dependency in the developer path).
+    additionalScrapeConfigs:
+      - job_name: golden-path
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: "true"
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+          - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+            action: replace
+            target_label: __address__
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:$2
+          - source_labels: [__meta_kubernetes_namespace]
+            action: replace
+            target_label: namespace
+          - source_labels: [__meta_kubernetes_pod_label_platform_example_io_service]
+            action: replace
+            target_label: service

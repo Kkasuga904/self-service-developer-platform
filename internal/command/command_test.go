@@ -62,6 +62,7 @@ metadata:
   name: payment-api
 spec:
   owner: payments-team
+  environment: dev
   image: example/payment-api:v1.2.3
   port: 8080
   resources:

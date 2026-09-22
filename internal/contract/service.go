@@ -18,6 +18,8 @@ type Metadata struct {
 
 type Spec struct {
 	Owner         string        `yaml:"owner" json:"owner"`
+	Environment   string        `yaml:"environment" json:"environment"`
+	Contact       string        `yaml:"contact,omitempty" json:"contact,omitempty"`
 	Image         string        `yaml:"image" json:"image"`
 	Port          int           `yaml:"port" json:"port"`
 	Resources     Resources     `yaml:"resources" json:"resources"`

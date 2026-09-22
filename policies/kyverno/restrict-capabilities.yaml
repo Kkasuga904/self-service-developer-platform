@@ -1,0 +1,43 @@
+# Platform guardrail: containers must drop ALL Linux capabilities. The Golden
+# Path renders `drop: ["ALL"]` by default; this policy blocks hand-written
+# workloads that keep dangerous capabilities such as SYS_ADMIN or NET_ADMIN.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: restrict-capabilities
+  annotations:
+    policies.kyverno.io/title: Require dropping ALL capabilities
+    policies.kyverno.io/severity: high
+spec:
+  background: false
+  validationFailureAction: Enforce
+  rules:
+    - name: drop-all-capabilities
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              operations:
+                - CREATE
+                - UPDATE
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kube-public
+                - kube-node-lease
+                - argocd
+                - kyverno
+                - monitoring
+      validate:
+        message: "Containers must set securityContext.capabilities.drop to [ALL]."
+        foreach:
+          - list: request.object.spec.containers
+            deny:
+              conditions:
+                any:
+                  - key: "{{ element.securityContext.capabilities.drop || '[]' }}"
+                    operator: AnyNotIn
+                    value: ["ALL"]

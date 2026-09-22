@@ -1,0 +1,66 @@
+# Case A: `latest` image must be REJECTED by disallow-latest-tag and pass
+# every other policy (guards against over-blocking).
+apiVersion: kyverno.io/v1
+kind: Test
+metadata:
+  name: case-a-latest
+policies:
+  - ../../kyverno/disallow-host-namespaces.yaml
+  - ../../kyverno/disallow-privileged.yaml
+  - ../../kyverno/require-run-as-non-root.yaml
+  - ../../kyverno/restrict-capabilities.yaml
+  - ../../kyverno/require-resources.yaml
+  - ../../kyverno/disallow-latest-tag.yaml
+  - ../../kyverno/require-owner-labels.yaml
+  - ../../kyverno/require-probes.yaml
+resources:
+  - ../invalid-latest.yaml
+results:
+  - policy: disallow-latest-tag
+    rule: pinned-image
+    resources:
+      - invalid-latest
+    kind: Pod
+    result: fail
+  - policy: disallow-host-namespaces
+    rule: no-host-namespaces
+    resources:
+      - invalid-latest
+    kind: Pod
+    result: pass
+  - policy: disallow-privileged
+    rule: no-privileged-containers
+    resources:
+      - invalid-latest
+    kind: Pod
+    result: pass
+  - policy: require-run-as-non-root
+    rule: run-as-non-root
+    resources:
+      - invalid-latest
+    kind: Pod
+    result: pass
+  - policy: restrict-capabilities
+    rule: drop-all-capabilities
+    resources:
+      - invalid-latest
+    kind: Pod
+    result: pass
+  - policy: require-resources
+    rule: cpu-memory-requests-limits
+    resources:
+      - invalid-latest
+    kind: Pod
+    result: pass
+  - policy: require-owner-labels
+    rule: ownership-labels
+    resources:
+      - invalid-latest
+    kind: Pod
+    result: pass
+  - policy: require-probes
+    rule: health-probes
+    resources:
+      - invalid-latest
+    kind: Pod
+    result: pass

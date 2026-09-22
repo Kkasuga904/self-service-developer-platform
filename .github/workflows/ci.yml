@@ -52,13 +52,18 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - name: Validate Platform Service contract
-        run: go run ./cmd/platform validate services/payments-team/payment-api/service.yaml
+      - name: Validate Platform Service contracts
+        run: |
+          go run ./cmd/platform validate services/payments-team/payment-api/service.yaml
+          go run ./cmd/platform validate services/orders-team/order-api/service.yaml
       - name: Lint and render Golden Path
         run: |
           helm lint charts/golden-path -f services/payments-team/payment-api/service.yaml
+          helm lint charts/golden-path -f services/orders-team/order-api/service.yaml
           helm template payment-api charts/golden-path \
-            -f services/payments-team/payment-api/service.yaml > rendered.yaml
+            -f services/payments-team/payment-api/service.yaml > rendered-payments.yaml
+          helm template order-api charts/golden-path \
+            -f services/orders-team/order-api/service.yaml > rendered-orders.yaml
           helm template payment-api-autoscaled charts/golden-path \
             -f services/payments-team/payment-api/service.yaml \
             --set spec.autoscaling.enabled=true \
@@ -71,8 +76,25 @@ jobs:
             https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz \
             | tar -xz kubeconform
           sudo install kubeconform /usr/local/bin/kubeconform
-      - run: kubeconform -strict -summary -kubernetes-version 1.35.0 rendered.yaml rendered-hpa.yaml
+      - run: kubeconform -strict -summary -kubernetes-version 1.35.0 rendered-payments.yaml rendered-orders.yaml rendered-hpa.yaml
       - run: kubectl kustomize gitops/platform >/dev/null
+      - name: Validate observability manifests
+        run: |
+          kubectl kustomize gitops/platform >/dev/null
+          python3 -c "import json; json.load(open('observability/dashboards/golden-path-overview.json'))"
+          kubectl apply --dry-run=client --validate=false -f observability/prometheus-rules.yaml
+
+  policy:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Kyverno CLI
+        uses: kyverno/action-install-cli@v0.2.0
+        with:
+          release: 'v1.19.1'
+      - run: kyverno version
+      - name: Run platform guardrail tests (cases A-E)
+        run: kyverno test policies/tests/
 
   security:
     runs-on: ubuntu-24.04
@@ -86,7 +108,7 @@ jobs:
           scanners: vuln,secret,misconfig
           severity: HIGH,CRITICAL
           exit-code: "1"
-          skip-dirs: infra/.terraform
+          skip-dirs: infra/.terraform,policies/tests
 
   image:
     runs-on: ubuntu-24.04

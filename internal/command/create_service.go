@@ -17,6 +17,8 @@ func CreateService(args []string, stdout, stderr io.Writer) error {
 	flags.SetOutput(stderr)
 	name := flags.String("name", "", "service name")
 	owner := flags.String("owner", "", "approved owning team")
+	environment := flags.String("environment", "dev", "deployment environment: dev, staging, or prod")
+	contact := flags.String("contact", "", "ownership identifier (team channel, email, or handle)")
 	image := flags.String("image", "", "container image with a non-latest tag or digest")
 	port := flags.Int("port", 0, "container port")
 	size := flags.String("size", "small", "resource size: small, medium, or large")
@@ -35,6 +37,8 @@ func CreateService(args []string, stdout, stderr io.Writer) error {
 		Metadata:   contract.Metadata{Name: *name},
 		Spec: contract.Spec{
 			Owner:         *owner,
+			Environment:   *environment,
+			Contact:       *contact,
 			Image:         *image,
 			Port:          *port,
 			Resources:     contract.Resources{Size: *size},
