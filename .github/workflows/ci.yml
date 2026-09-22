@@ -78,7 +78,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - uses: aquasecurity/trivy-action@0.36.0
+      - uses: aquasecurity/trivy-action@v0.36.0
         with:
           trivy-version: v0.74.0
           scan-type: fs
@@ -106,6 +106,13 @@ jobs:
       id-token: write
       contents: read
     steps:
+      - name: Record non-secret OIDC claims
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const token = await core.getIDToken('sts.amazonaws.com');
+            const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString());
+            core.info(JSON.stringify({ sub: claims.sub, aud: claims.aud, repository: claims.repository, ref: claims.ref }));
       - uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: ${{ vars.AWS_VALIDATION_ROLE_ARN }}
