@@ -58,4 +58,15 @@ this repository.
 
 Do not delete healthy application workloads. Restore the Argo CD deployment,
 verify repository access, then inspect the reconciliation queue and sync status.
-Application data plane impact and recovery remain Phase 4 validation subjects.
+Use the guarded `scripts/phase4-experiments.sh argocd-down|argocd-up` actions
+only on the named disposable cluster; they save and restore the original
+replica count. Application data plane impact and recovery are recorded in
+`docs/FAILURE_EXPERIMENTS.md`, and remain NOT RUN until observed.
+
+## Prometheus failure
+
+Do not restart application workloads. Restore Prometheus with
+`scripts/phase4-experiments.sh observability-up`, then prove a Ready Pod,
+Golden Path targets UP, fresh sample timestamps, a functional SLI query, and
+Grafana data. Missing samples during the outage are a blind spot, not evidence
+of application downtime.

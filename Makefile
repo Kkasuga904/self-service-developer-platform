@@ -1,4 +1,4 @@
-.PHONY: build test validate render bootstrap destroy
+.PHONY: build test validate render bootstrap phase4-baseline destroy
 
 build:
 	go build -o platform ./cmd/platform
@@ -15,6 +15,9 @@ validate:
 
 bootstrap:
 	bash scripts/bootstrap-gitops.sh
+
+phase4-baseline:
+	bash scripts/phase4-experiments.sh baseline
 
 destroy:
 	bash scripts/destroy.sh

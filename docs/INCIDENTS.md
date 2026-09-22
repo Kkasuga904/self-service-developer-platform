@@ -1,10 +1,18 @@
-# Incident scenarios
+# Unexpected incidents
 
-No incident experiment has been executed in Phase 2. Phase 4 will create
-evidence-driven records for a bad image/probe deployment, manual Git drift, a
-policy violation, and Argo CD unavailability. Until then all four are **NOT
-RUN**, and no recovery time or availability result is claimed.
+This file is for unplanned failures encountered while building or validating
+the platform. Deliberate Phase 4 injections are kept separately in
+[FAILURE_EXPERIMENTS.md](FAILURE_EXPERIMENTS.md); the two evidence classes must
+not be mixed.
 
-The central hypothesis for an Argo CD failure is that existing application Pods
-continue to serve while new reconciliation and deployment visibility stop. It
-must be tested before being reported as observed behavior.
+Unexpected incidents already preserved in the detailed validation record
+include EKS node join/security-group routing, Argo CD source files hidden by
+`.gitignore`, an invalid Trivy Action tag, GitHub OIDC custom-subject mismatch,
+a stale Terraform plan, Kyverno webhook access on port 9443, bootstrap version
+validation, and CRD client dry-run discovery behavior. See the Phase 2/3
+incident entries in [VALIDATION.md](VALIDATION.md) for symptoms, diagnosis,
+fixes, and rerun evidence.
+
+At the start of Phase 4 on 2026-09-23 JST, the `portfolio` AWS SSO session was
+expired. This was an access prerequisite, not an injected platform failure; no
+AWS mutation occurred before authentication was restored.

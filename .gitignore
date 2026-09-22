@@ -9,4 +9,5 @@ terraform.tfvars
 /rendered-payments.yaml
 /rendered-orders.yaml
 /rendered-hpa.yaml
+/.phase4-state/
 .DS_Store

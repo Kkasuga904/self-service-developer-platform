@@ -1,221 +1,196 @@
 # Self-Service Developer Platform on EKS
 
-> Personal implementation. A real AWS/EKS validation run was performed on
-> 2026-09-22 JST against a disposable environment (EKS 1.35, `t3.medium` x2,
-> single NAT, no RDS/LoadBalancer/mesh/GPU) and fully destroyed afterwards
-> with zero residual project resources. Phase 3 adds guardrails, a second
-> team, RBAC and observability; see [docs/VALIDATION.md](docs/VALIDATION.md)
-> for what is validated vs. assumed. This is not production operation
-> experience and is not described as production-ready.
+> Personal portfolio project, validated in short-lived disposable EKS
+> environments—not employer production operation. The repository records what
+> was observed, what was only designed, and what remains unverified. It does
+> not claim to be production-proven, enterprise-ready, or battle-tested.
 
-This personal portfolio explores a Platform Engineering product: a small,
-reviewable contract that lets an application developer request a safe standard
-workload without authoring Kubernetes objects directly.
+## The problem and the user
 
-## Problem
-
-Without a platform contract, every developer must repeatedly understand and
-assemble Kubernetes Deployments, Services, probes, resource settings, disruption
-budgets, security contexts, labels, and deployment tooling. The result is slow
-onboarding and inconsistent safety.
-
-## Platform users and product
-
-The user is an application developer. The product is a Golden Path plus a
-self-service interface:
+Application developers should not have to independently assemble Deployments,
+Services, probes, disruption budgets, security contexts, resource policies,
+deployment automation, and monitoring for every service. This platform offers
+a small, reviewable service contract and a Golden Path:
 
 ```text
-small Service Definition -> reviewed Git change -> standard Helm workload -> Argo CD reconciliation
+Service Definition -> contract/policy CI -> Git review -> ApplicationSet
+-> Helm Golden Path -> Kubernetes admission -> observed application
 ```
 
-The platform absorbs repeatable infrastructure choices. Developers retain the
-application image, port, ownership, size, replicas, health paths, and bounded
-autoscaling choices.
+The developer owns application intent: image, port, team, environment,
+resource size, replica count, health paths, and bounded autoscaling. The
+platform owns the repeatable Kubernetes structure and guardrails.
 
-## Current status
+## What the Golden Path produces
 
-| Capability | Implementation | Validation |
+A `platform.example.io/v1alpha1` Service Definition is validated by the Go CLI
+and JSON schema. Argo CD discovers it with ApplicationSet and Helm renders a
+Deployment, ClusterIP Service, PDB, and optional HPA. Defaults include:
+
+- readiness/liveness probes and a zero-unavailable rolling update;
+- CPU/memory requests and limits from named sizes;
+- non-root execution, RuntimeDefault seccomp, no privilege escalation, dropped
+  capabilities, read-only root filesystem, and no service-account token;
+- ownership/environment labels and optional Prometheus scraping.
+
+Arbitrary PodSpec fragments and `extraObjects` are intentionally excluded.
+See [Platform Contract](docs/PLATFORM_CONTRACT.md) and
+[Golden Path](docs/GOLDEN_PATH.md).
+
+## Safety and ownership boundaries
+
+| Layer | Protection | Boundary |
 | --- | --- | --- |
-| Service Definition v1alpha1 | Implemented (owner, environment, contact) | See validation record |
-| Go CLI: create-service / validate / doctor | Implemented | See validation record |
-| Golden Path Helm chart | Implemented | See validation record |
-| Kyverno guardrails (8 ClusterPolicies) | Implemented, CI + admission share files | `kyverno test` cases A–E; live admission in EKS validation |
-| Multi-team (payments, orders) + RBAC | Implemented | Structural Go tests; live `can-i` in EKS validation |
-| Observability (Prometheus/Grafana, dashboard, SLO) | Implemented, minimal stack | Manifest/JSON tests; live data in EKS validation |
-| Terraform VPC/EKS/IAM/ECR foundation | Implemented as code | Real AWS apply + verified destroy on 2026-09-22; live transcript PARTIAL post-destroy, residuals PASS |
-| Argo CD root Application/ApplicationSet | Implemented as manifests | Reconciled in the validation cluster (first session); live state PARTIAL post-destroy |
-| Sample application | Implemented, ECR digest-pinned | Image built/pushed immutable in validation; in-cluster `/healthz` PARTIAL post-destroy, local container PASS |
-| GitHub Actions | Implemented, OIDC-only (no long-lived keys) | Run 35704359374 all 6 jobs PASS incl. `sts` + `describe-cluster ACTIVE/1.35`; post-destroy role ref cleaned up |
-| Kyverno admission policy | Not implemented; Phase 3 | NOT RUN |
-| Observability stack | Not implemented; Phase 3 | NOT RUN |
-| Second team | Not implemented; Phase 3 | NOT RUN |
-| Reliability experiments | Not implemented; Phase 4 | NOT RUN |
+| Contract/CLI | rejects unknown teams, invalid names, untagged/`latest` images, invalid sizes/ports/replicas | cannot prove an image exists or an app starts |
+| CI policy | tests the same Kyverno policies before merge | feedback, not the authoritative runtime gate |
+| Admission | eight Enforce-mode policies reject unsafe Pods in EKS | policy-valid runtime failures remain possible |
+| GitOps | reviewed desired state, drift detection, prune and self-heal | no automatic semantic rollback of a bad Git revision |
+| Team RBAC | own-namespace read/log/port-forward; workload writes withheld | namespace is not hostile-tenant isolation |
+| Observability | request/error/latency/availability signals and standard dashboard | monitoring can fail independently; no external alert route |
 
-## Architecture
+The important distinction is deliberate: platform controls reduce classes of
+failure; they do not make application revisions infallible. Phase 4 exercises
+these boundaries in [Intentional Failure Experiments](docs/FAILURE_EXPERIMENTS.md).
+
+## Architecture and deployment
 
 ```mermaid
 flowchart LR
-  D[Application developer] --> C[Go platform CLI]
-  C --> S[Service Definition]
-  S --> PR[GitHub pull request]
-  PR --> CI[Contract, Go, Terraform, Helm, manifest and security checks]
-  CI --> G[main branch desired state]
-  G --> AS[Argo CD ApplicationSet]
-  AS --> H[Golden Path Helm chart]
-  H --> NS[team-payments namespace]
-  TF[Terraform] --> AWS[VPC / IAM / EKS]
-  AWS --> NS
-  AR[Argo CD] --> AS
+  Dev[Application developer] --> CLI[Go CLI + Service contract]
+  CLI --> PR[Git review + CI]
+  PR --> Git[Desired state]
+  Git --> AS[Argo CD ApplicationSet]
+  AS --> Helm[Golden Path Helm chart]
+  Helm --> Policy[Kyverno admission]
+  Policy --> Apps[Team workloads]
+  Apps --> Prom[Prometheus / Grafana]
+  TF[Terraform] --> AWS[VPC / EKS / IAM / ECR]
+  AWS --> AS
 ```
 
-Terraform owns the AWS foundation, including one sample-image ECR repository. Helm and Argo CD own cluster configuration
-and workloads. Terraform deliberately does not manage developer Deployments,
-Services, HPAs, PDBs, or Argo Applications.
+Terraform owns the AWS/EKS foundation. Helm and Argo CD own cluster workloads;
+Terraform does not own application Deployments. Bootstrap scripts install
+pinned Argo CD, Kyverno, and kube-prometheus-stack releases. Creation is kept
+out of CI because the environment is deliberately cost- and approval-bounded.
+See [Architecture](docs/ARCHITECTURE.md) and the ADRs in `docs/adr/`.
 
-## Developer journey
+## Validation evidence
 
-Build the CLI and create a contract document:
+The strongest evidence is behavior, not technology count:
+
+- real EKS create/use/destroy cycle with state zero and AWS API residual checks;
+- GitOps reconciliation plus manual-drift self-heal;
+- live Kyverno admission rejection backed by CI fixtures;
+- positive and negative team RBAC checks on EKS;
+- Prometheus targets, application metrics, SLI queries, and Grafana dashboard
+  data on the disposable cluster;
+- GitHub Actions OIDC positive/negative tests without long-lived AWS keys;
+- unexpected cloud integration incidents retained with diagnosis and fixes.
+
+Exact commands, dates, qualifications, and PASS/PARTIAL/NOT RUN states live in
+[Validation](docs/VALIDATION.md). Unexpected implementation incidents are in
+[Incidents](docs/INCIDENTS.md); intentional failure injections are kept apart
+in [Failure Experiments](docs/FAILURE_EXPERIMENTS.md). Never infer a PASS from
+architecture or from a previous phase.
+
+## What failed in real AWS
+
+Local rendering did not expose every integration problem. Real runs found EKS
+node-join/security-group behavior, an Argo CD source affected by `.gitignore`,
+an invalid Trivy Action release, a customized GitHub OIDC subject, a stale
+Terraform plan, API-server-to-Kyverno webhook connectivity on port 9443,
+bootstrap version-check behavior, and CRD client-dry-run discovery behavior.
+The repository preserves symptoms, cause, correction, and rerun evidence
+instead of presenting a frictionless success story.
+
+## Try the contract and local checks
 
 ```bash
 make build
 ./platform create-service \
-  --name payment-api \
+  --name example-api \
   --owner payments-team \
   --environment dev \
   --contact payments-team@example.com \
-  --image ghcr.io/acme/payment-api:v1.2.3 \
+  --image ghcr.io/example/example-api:v1.2.3 \
   --port 8080
 ./platform validate services/payments-team/payment-api/service.yaml
-```
-
-The CLI refuses unknown owners, invalid names, `latest` or untagged images,
-invalid sizes, ports, and replica counts. It never overwrites an existing file.
-The developer reviews the generated YAML, commits it, and opens a PR. CI renders
-the Golden Path and runs the Kyverno guardrail suite (cases A–E) against
-Pod-level fixtures; after merge, Argo CD creates one Application per service
-and reconciles it, while admission enforces the same policies on anything
-applied directly.
-
-The committed sample uses `ghcr.io/example/payment-api:v0.1.0` as a contract
-example, not as a claimed deployable artifact. Before EKS validation it must be
-replaced with the pushed sample image's immutable reference.
-
-## Platform contract
-
-The v1alpha1 contract is intentionally small. Platform-owned defaults include:
-
-- Deployment, ClusterIP Service, PDB and optional HPA;
-- CPU/memory requests and limits selected by `small`, `medium`, or `large`;
-- readiness and liveness probes;
-- owner and managed-by labels;
-- non-root execution, RuntimeDefault seccomp, no privilege escalation, all
-  Linux capabilities dropped, read-only root filesystem;
-- no service-account token mounted into the workload.
-
-Arbitrary PodSpec fragments and `extraObjects` are not supported. A new typed
-field is preferred over a raw escape hatch. See
-[PLATFORM_CONTRACT.md](docs/PLATFORM_CONTRACT.md).
-
-## Repository structure
-
-```text
-cmd/platform/             three-command CLI entrypoint
-internal/contract/        Service Definition types and validation
-internal/command/         small command implementations
-schemas/                  published JSON Schema
-charts/golden-path/       standard workload templates
-services/                 developer-owned definitions
-sample-app/               dependency-free HTTP example
-gitops/bootstrap/         imperative Argo CD boundary and root Application
-gitops/platform/          AppProject, team namespace, ApplicationSet
-infra/                    AWS foundation only
-docs/                     decisions, boundaries, runbooks and evidence
-```
-
-## Local use
-
-Prerequisites are Go, Terraform, Helm, kubectl, Bash, and optionally Docker and
-kubeconform. `platform doctor` reports the core tools.
-
-```bash
 make validate
 ```
 
-The validation script does not contact AWS or create a cluster. Missing optional
-tools are explicitly reported rather than silently counted as PASS.
+`make validate` runs Go tests/vet, contract validation, Terraform fmt/validate,
+Helm lint/render, kubeconform when installed, GitOps rendering, Kyverno tests,
+observability checks, Trivy when installed, and a Docker build when available.
+Missing optional tools are reported as NOT RUN rather than silently counted.
 
-## EKS lifecycle
-
-EKS creation is intentionally not part of CI. The one real validation run
-(2026-09-22 JST) followed a separate cost and resource review, then was
-destroyed plan-first with API-verified zero residuals. The pattern remains:
+The reusable Phase 4 runner is intentionally guarded and sequential:
 
 ```bash
-terraform -chdir=infra init
-cp infra/terraform.tfvars.example infra/terraform.tfvars
-# Replace the documentation-only API CIDR with your current public IP /32.
-terraform -chdir=infra plan -out=tfplan
-terraform -chdir=infra show tfplan
-# terraform -chdir=infra apply tfplan  # only after explicit approval
+AWS_PROFILE=portfolio make phase4-baseline
+bash scripts/phase4-experiments.sh  # prints available actions
 ```
 
-Destruction is plan-first and requires typing `destroy`:
+## Repository map
+
+```text
+cmd/platform/             CLI entry point
+internal/                 contract, commands, structural tests
+schemas/                  versioned Service schema
+charts/golden-path/       standard workload templates
+services/                 team-owned application intent
+gitops/                   bootstrap, AppProject, ApplicationSet, team RBAC
+policies/                 Kyverno policies and fixtures
+observability/            Prometheus values/rules and Grafana dashboard
+infra/                    disposable AWS foundation
+scripts/                  validation, bootstrap, experiments, destroy
+docs/                     evidence, runbooks, decisions, interview guide
+```
+
+## Limitations
+
+This is a two-team personal demonstration on a shared, short-lived cluster.
+It does not prove long-running operations, organizational adoption, hostile
+multi-tenancy, 30-day SLO compliance, disaster recovery, or scale to many
+teams. Namespace/RBAC is an administrative boundary; nodes, networking and
+cluster controllers remain shared. Alertmanager/routing, log aggregation,
+secrets management, progressive delivery, databases, queues, service mesh,
+multi-cluster, and multi-region are outside the implemented scope.
+
+The sample Service definitions reference a digest from a disposable ECR run;
+after destroy that reference is evidence of the tested revision, not a
+currently deployable public image. A fresh validation run builds/pushes a new
+image and commits its digest before bootstrap.
+
+## Future production extensions
+
+Potential next steps are recorded rather than implemented as a new feature
+phase: remote Terraform state and locking, NetworkPolicy, ResourceQuota,
+image signing/verification, real workforce identity integration, HA platform
+controllers, independent alert routing, durable monitoring, staged policy
+rollout, longer SLO evaluation, and explicit disaster-recovery objectives.
+Priority should follow measured risk and organizational requirements.
+
+## Cost and teardown
+
+The disposable design uses an EKS control plane, two `t3.medium` nodes, one NAT
+Gateway/EIP, EBS, ECR, CloudWatch, and the controllers on the same nodes; it has
+no RDS, external LoadBalancer, GPU, or mesh. A short experiment is not a reliable
+monthly billing estimate, and exact cost is claimed only when billing evidence
+exists. Leaving the design running continuously can exceed USD 100/month.
+
+Destruction is plan-first and requires explicit confirmation:
 
 ```bash
 make destroy
 ```
 
-## Cost
+Completion requires Terraform state to contain zero resources plus AWS API
+checks for project EKS, node groups, EC2/ASG, VPC/subnets/NAT/EIP/ENI/SG/EBS,
+ECR, CloudWatch, IAM roles, and project-created OIDC resources. No pre-existing
+account resource may be deleted.
 
-The design is disposable, not always-on. Principal charges are the EKS control
-plane, two `t3.medium` nodes, EBS, one NAT Gateway, public IPv4, CloudWatch and
-data processing. One NAT is an explicit cost/availability compromise for this
-personal validation environment. The final estimate will be refreshed before
-any apply. Leaving this stack running continuously can exceed USD 100/month.
+## Interview preparation
 
-## Key trade-offs
-
-- **EKS vs ECS:** EKS is justified here by the platform API and GitOps control
-  plane, not as a universally better scheduler. ECS was covered separately.
-- **Terraform vs Helm:** Terraform stops at AWS/EKS; Helm owns repeatable
-  workloads. This avoids dual ownership and Terraform state full of workloads.
-- **Push vs GitOps:** Git supplies review, audit, rollback and drift visibility,
-  at the cost of an indirect deployment path.
-- **Abstraction vs flexibility:** the typed API makes the safe path easy but
-  does not expose every PodSpec feature.
-- **Central control vs autonomy:** teams own application intent; the platform
-  owns cluster-wide defaults and allowed destinations.
-- **Standardization vs escape hatch:** new typed fields require deliberate
-  platform evolution; raw manifest injection is excluded.
-- **Security vs velocity:** Phase 2 provides secure generated defaults and CI
-  validation. Admission enforcement intentionally waits for Phase 3.
-
-See [TRADE_OFFS.md](docs/TRADE_OFFS.md) for consequences and rejected options.
-
-## Non-goals
-
-This MVP does not provision databases or queues, manage application secrets,
-provide a portal, implement a custom operator, run a service mesh, support
-hostile multi-tenancy, deliver progressive deployment, or claim production HA.
-
-## Honest scope
-
-This is a personal project, not production operation at an employer. Validated
-on 2026-09-22: local Go/Terraform/Helm/manifest/security checks (PASS),
-GitHub OIDC without long-lived keys (PASS, hosted run), and a full
-create-then-destroy cycle of the disposable AWS environment (destroy and
-residual checks PASS, verified via AWS APIs). Live-cluster behavior (EKS
-internals, app reachability, GitOps sync, drift recovery) was exercised during
-the run and is recorded as PARTIAL because the environment was destroyed as
-required, so it cannot be re-observed. Phase 3 adds guardrails, a second team
-with RBAC, and observability with an SLO hypothesis: locally validated and,
-where stated in the validation record, verified on a fresh disposable
-cluster. Unvalidated or unimplemented: negative OIDC tests (unless recorded),
-billing figures, admission policy exceptions, log aggregation, multi-team
-isolation beyond namespaces/RBAC, observability, SLO measurement over time,
-and failure scenarios, as marked in the validation record.
-
-It is not described as production-ready. Prohibited phrases for this repo:
-production-proven, enterprise-ready, battle-tested, production Kubernetes
-operation experience. Accurate phrases: production-oriented, validated in a
-disposable EKS environment, intentionally scoped, limitations documented.
+[INTERVIEW_GUIDE.md](docs/INTERVIEW_GUIDE.md) ties 20 likely questions to key
+concepts, repository evidence, trade-offs, and follow-ups. It also states which
+claims are safe and which would exceed the evidence.

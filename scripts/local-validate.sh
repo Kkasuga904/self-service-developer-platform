@@ -45,7 +45,7 @@ fi
 
 kubectl kustomize gitops/platform >/dev/null
 python3 -c "import json; json.load(open('observability/dashboards/golden-path-overview.json'))"
-bash -n scripts/bootstrap-gitops.sh scripts/bootstrap-kyverno.sh scripts/bootstrap-observability.sh scripts/destroy.sh scripts/local-validate.sh
+bash -n scripts/bootstrap-gitops.sh scripts/bootstrap-kyverno.sh scripts/bootstrap-observability.sh scripts/destroy.sh scripts/phase4-experiments.sh scripts/local-validate.sh
 
 if command -v trivy >/dev/null 2>&1; then
   # policies/tests holds intentionally-invalid Kyverno fixtures (asserted
