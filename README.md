@@ -1,8 +1,11 @@
 # Self-Service Developer Platform on EKS
 
-> Phase 2 MVP. Local validation is recorded in
-> [docs/VALIDATION.md](docs/VALIDATION.md). No AWS resource has been created and
-> no real EKS or Argo CD reconciliation is claimed yet.
+> Personal implementation. A real AWS/EKS validation run was performed on
+> 2026-09-22 JST against a disposable environment (EKS 1.35, `t3.medium` x2,
+> single NAT, no RDS/LoadBalancer/mesh/GPU) and fully destroyed afterwards
+> with zero residual project resources. Evidence, partial-scope limits, and
+> failure records are in [docs/VALIDATION.md](docs/VALIDATION.md). This is not
+> production operation experience and is not described as production-ready.
 
 This personal portfolio explores a Platform Engineering product: a small,
 reviewable contract that lets an application developer request a safe standard
@@ -35,10 +38,10 @@ autoscaling choices.
 | Service Definition v1alpha1 | Implemented | See validation record |
 | Go CLI: create-service / validate / doctor | Implemented | See validation record |
 | Golden Path Helm chart | Implemented | See validation record |
-| Terraform VPC/EKS/IAM/ECR foundation | Implemented as code | Local validation only; AWS NOT RUN |
-| Argo CD root Application/ApplicationSet | Implemented as manifests | Rendering only; reconciliation NOT RUN |
-| Sample application | Implemented | Local tests/build recorded separately |
-| GitHub Actions | Implemented | Hosted workflow NOT RUN until pushed |
+| Terraform VPC/EKS/IAM/ECR foundation | Implemented as code | Real AWS apply + verified destroy on 2026-09-22; live transcript PARTIAL post-destroy, residuals PASS |
+| Argo CD root Application/ApplicationSet | Implemented as manifests | Reconciled in the validation cluster (first session); live state PARTIAL post-destroy |
+| Sample application | Implemented, ECR digest-pinned | Image built/pushed immutable in validation; in-cluster `/healthz` PARTIAL post-destroy, local container PASS |
+| GitHub Actions | Implemented, OIDC-only (no long-lived keys) | Run 35704359374 all 6 jobs PASS incl. `sts` + `describe-cluster ACTIVE/1.35`; post-destroy role ref cleaned up |
 | Kyverno admission policy | Not implemented; Phase 3 | NOT RUN |
 | Observability stack | Not implemented; Phase 3 | NOT RUN |
 | Second team | Not implemented; Phase 3 | NOT RUN |
@@ -136,8 +139,9 @@ tools are explicitly reported rather than silently counted as PASS.
 
 ## EKS lifecycle
 
-EKS creation is intentionally not part of CI and has not been run. After a
-separate cost and resource review:
+EKS creation is intentionally not part of CI. The one real validation run
+(2026-09-22 JST) followed a separate cost and resource review, then was
+destroyed plan-first with API-verified zero residuals. The pattern remains:
 
 ```bash
 terraform -chdir=infra init
@@ -189,11 +193,16 @@ hostile multi-tenancy, deliver progressive deployment, or claim production HA.
 
 ## Honest scope
 
-This is a personal project, not production operation at an employer. The Go and
-sample-app tests, static Terraform checks, Helm rendering, and other commands in
-the validation record are the only locally validated claims. EKS creation,
-Argo CD reconciliation, GitHub-hosted CI, admission policy, two-team isolation,
-observability, SLO measurement and failure scenarios remain unvalidated or
-unimplemented as marked above.
+This is a personal project, not production operation at an employer. Validated
+on 2026-09-22: local Go/Terraform/Helm/manifest/security checks (PASS),
+GitHub OIDC without long-lived keys (PASS, hosted run), and a full
+create-then-destroy cycle of the disposable AWS environment (destroy and
+residual checks PASS, verified via AWS APIs). Live-cluster behavior (EKS
+internals, app reachability, GitOps sync, drift recovery) was exercised during
+the run and is recorded as PARTIAL because the environment was destroyed as
+required, so it cannot be re-observed. Unvalidated or unimplemented: negative
+OIDC tests, billing figures, admission policy, two-team isolation,
+observability, SLO measurement, and failure scenarios, as marked above and in
+the validation record.
 
 It is not described as production-ready.
