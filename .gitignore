@@ -2,6 +2,7 @@
 *.tfstate
 *.tfstate.*
 *.tfplan
+/infra/tfplan
 terraform.tfvars
 /platform
 /platform.exe
