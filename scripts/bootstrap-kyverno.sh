@@ -22,10 +22,10 @@ helm upgrade --install kyverno kyverno/kyverno \
   --wait \
   --timeout 10m
 
-installed_app="$(kubectl -n kyverno get deployment kyverno-admission-controller \
-  -o jsonpath='{.metadata.labels.app\.kubernetes\.io/version}' 2>/dev/null || true)"
-if [[ "${installed_app}" != "${KYVERNO_APP_VERSION}" ]]; then
-  echo "expected Kyverno ${KYVERNO_APP_VERSION}, found '${installed_app}'" >&2
+installed_image="$(kubectl -n kyverno get deployment kyverno-admission-controller \
+  -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || true)"
+if [[ "${installed_image}" != *":${KYVERNO_APP_VERSION}" ]]; then
+  echo "expected Kyverno image tag ${KYVERNO_APP_VERSION}, found '${installed_image}'" >&2
   exit 1
 fi
 

@@ -67,6 +67,24 @@ resource "aws_security_group_rule" "nodes_from_cluster" {
   security_group_id        = aws_security_group.nodes.id
 }
 
+# Admission webhooks (Kyverno serves 9443 on its Pods behind the 443
+# Service port) and kubelet aggregation are called by the EKS-managed
+# control plane ENIs, which carry the EKS-created cluster SG -- not the
+# additional custom cluster SG above. Without this rule the API server cannot
+# reach webhook Pods on the private nodes and every ClusterPolicy create
+# times out. Scoped SG-to-SG on the required ports only; no CIDR widening.
+resource "aws_security_group_rule" "nodes_from_eks_managed_sg" {
+  for_each = toset(["443", "10250", "9443"])
+
+  type                     = "ingress"
+  from_port                = tonumber(each.value)
+  to_port                  = tonumber(each.value)
+  protocol                 = "tcp"
+  source_security_group_id = aws_eks_cluster.this.vpc_config[0].cluster_security_group_id
+  security_group_id        = aws_security_group.nodes.id
+  description              = "Allow the EKS-managed control plane to reach kubelets and admission webhooks"
+}
+
 resource "aws_security_group_rule" "cluster_api_from_nodes" {
   type                     = "ingress"
   from_port                = 443
