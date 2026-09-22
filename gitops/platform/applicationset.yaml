@@ -1,0 +1,38 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: developer-services
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - git:
+        repoURL: https://github.com/Kkasuga904/self-service-developer-platform.git
+        revision: main
+        files:
+          - path: services/*/*/service.yaml
+  template:
+    metadata:
+      name: '{{ .metadata.name }}'
+      labels:
+        platform.example.io/owner: '{{ .spec.owner }}'
+    spec:
+      project: developer-services
+      source:
+        repoURL: https://github.com/Kkasuga904/self-service-developer-platform.git
+        targetRevision: main
+        path: charts/golden-path
+        helm:
+          releaseName: '{{ .metadata.name }}'
+          valueFiles:
+            - '../../{{ .path.path }}/service.yaml'
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: 'team-{{ .spec.owner | trimSuffix "-team" }}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=false

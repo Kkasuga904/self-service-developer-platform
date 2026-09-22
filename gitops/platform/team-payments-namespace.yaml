@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: team-payments
+  labels:
+    platform.example.io/owner: payments-team
+    app.kubernetes.io/managed-by: argocd

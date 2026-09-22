@@ -1,0 +1,22 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: developer-services
+  namespace: argocd
+spec:
+  description: Phase 2 Golden Path services
+  sourceRepos:
+    - https://github.com/Kkasuga904/self-service-developer-platform.git
+  destinations:
+    - namespace: team-payments
+      server: https://kubernetes.default.svc
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+    - group: apps
+      kind: Deployment
+    - group: ""
+      kind: Service
+    - group: autoscaling
+      kind: HorizontalPodAutoscaler
+    - group: policy
+      kind: PodDisruptionBudget
