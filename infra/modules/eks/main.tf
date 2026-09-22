@@ -67,6 +67,16 @@ resource "aws_security_group_rule" "nodes_from_cluster" {
   security_group_id        = aws_security_group.nodes.id
 }
 
+resource "aws_security_group_rule" "cluster_api_from_nodes" {
+  type                     = "ingress"
+  from_port                = 443
+  to_port                  = 443
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.nodes.id
+  security_group_id        = aws_security_group.cluster.id
+  description              = "Allow private worker nodes to join and use the EKS API"
+}
+
 resource "aws_security_group_rule" "nodes_internal" {
   type              = "ingress"
   from_port         = 0
