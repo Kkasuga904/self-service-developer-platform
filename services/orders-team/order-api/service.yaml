@@ -6,7 +6,7 @@ spec:
   owner: orders-team
   environment: dev
   contact: orders-team@example.com
-  image: 440744245648.dkr.ecr.ap-northeast-1.amazonaws.com/developer-platform-dev/payment-api@sha256:953ef4d7f9522a8f98fab183b67cd9270216379cd00a6b23841554b7739cfcae
+  image: 440744245648.dkr.ecr.ap-northeast-1.amazonaws.com/developer-platform-dev/payment-api@sha256:b359742b13d36e0574dcfe492f38c6367c2e90c9ed7d0e4c23f6acc6c2fcfe05
   port: 8080
   resources:
     size: small
