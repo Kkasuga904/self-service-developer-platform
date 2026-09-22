@@ -1,0 +1,115 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: |
+            go.sum
+            sample-app/go.mod
+      - run: go test ./...
+      - run: go vet ./...
+      - run: go test ./...
+        working-directory: sample-app
+      - run: go vet ./...
+        working-directory: sample-app
+      - run: go build ./cmd/platform
+
+  terraform:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.13.3
+      - run: terraform fmt -check -recursive
+        working-directory: infra
+      - run: terraform init -backend=false
+        working-directory: infra
+      - run: terraform validate
+        working-directory: infra
+
+  manifests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.18.6
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Validate Platform Service contract
+        run: go run ./cmd/platform validate services/payments-team/payment-api/service.yaml
+      - name: Lint and render Golden Path
+        run: |
+          helm lint charts/golden-path -f services/payments-team/payment-api/service.yaml
+          helm template payment-api charts/golden-path \
+            -f services/payments-team/payment-api/service.yaml > rendered.yaml
+          helm template payment-api-autoscaled charts/golden-path \
+            -f services/payments-team/payment-api/service.yaml \
+            --set spec.autoscaling.enabled=true \
+            --set spec.autoscaling.minReplicas=2 \
+            --set spec.autoscaling.maxReplicas=4 \
+            --set spec.autoscaling.targetCPUUtilization=60 > rendered-hpa.yaml
+      - name: Install kubeconform
+        run: |
+          curl --fail --silent --show-error --location \
+            https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz \
+            | tar -xz kubeconform
+          sudo install kubeconform /usr/local/bin/kubeconform
+      - run: kubeconform -strict -summary -kubernetes-version 1.35.0 rendered.yaml rendered-hpa.yaml
+      - run: kubectl kustomize gitops/platform >/dev/null
+
+  security:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aquasecurity/trivy-action@0.33.1
+        with:
+          trivy-version: v0.74.0
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          skip-dirs: infra/.terraform
+
+  image:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: sample-app
+          push: false
+          tags: platform-sample-app:${{ github.sha }}
+
+  aws-oidc:
+    if: ${{ vars.AWS_VALIDATION_ROLE_ARN != '' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ vars.AWS_VALIDATION_ROLE_ARN }}
+          aws-region: ap-northeast-1
+      - name: Verify federated identity
+        run: aws sts get-caller-identity
+      - name: Verify least-privilege cluster discovery
+        run: aws eks describe-cluster --name developer-platform-dev --query 'cluster.[name,status,version]' --output table

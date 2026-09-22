@@ -1,0 +1,11 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "golden-path.name" . }}
+  labels:
+    {{- include "golden-path.labels" . | nindent 4 }}
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      {{- include "golden-path.selectorLabels" . | nindent 6 }}

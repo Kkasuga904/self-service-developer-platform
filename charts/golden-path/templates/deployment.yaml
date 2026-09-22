@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "golden-path.name" . }}
+  labels:
+    {{- include "golden-path.labels" . | nindent 4 }}
+spec:
+  {{- if not (and .Values.spec.autoscaling .Values.spec.autoscaling.enabled) }}
+  replicas: {{ .Values.spec.availability.replicas }}
+  {{- end }}
+  revisionHistoryLimit: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      {{- include "golden-path.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "golden-path.labels" . | nindent 8 }}
+      {{- if .Values.spec.observability.enabled }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /metrics
+        prometheus.io/port: {{ .Values.spec.port | quote }}
+      {{- end }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: application
+          image: {{ .Values.spec.image | quote }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: {{ .Values.spec.port }}
+              protocol: TCP
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
+          resources:
+            {{- include "golden-path.resources" . | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: {{ default "/readyz" .Values.spec.health.readinessPath }}
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: {{ default "/healthz" .Values.spec.health.livenessPath }}
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+      terminationGracePeriodSeconds: 30

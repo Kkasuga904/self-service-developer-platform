@@ -1,0 +1,22 @@
+{{- if and .Values.spec.autoscaling .Values.spec.autoscaling.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "golden-path.name" . }}
+  labels:
+    {{- include "golden-path.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "golden-path.name" . }}
+  minReplicas: {{ .Values.spec.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.spec.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.spec.autoscaling.targetCPUUtilization }}
+{{- end }}

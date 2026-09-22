@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": { "const": "platform.example.io/v1alpha1" },
+    "kind": { "const": "Service" },
+    "metadata": {
+      "type": "object", "additionalProperties": false, "required": ["name"],
+      "properties": { "name": { "type": "string", "pattern": "^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?$", "maxLength": 63 } }
+    },
+    "spec": {
+      "type": "object", "additionalProperties": false,
+      "required": ["owner", "image", "port", "resources", "availability", "observability"],
+      "properties": {
+        "owner": { "enum": ["payments-team"] },
+        "image": { "type": "string", "minLength": 1 },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "resources": {
+          "type": "object", "additionalProperties": false, "required": ["size"],
+          "properties": { "size": { "enum": ["small", "medium", "large"] } }
+        },
+        "availability": {
+          "type": "object", "additionalProperties": false, "required": ["replicas"],
+          "properties": { "replicas": { "type": "integer", "minimum": 2, "maximum": 10 } }
+        },
+        "observability": {
+          "type": "object", "additionalProperties": false, "required": ["enabled"],
+          "properties": { "enabled": { "type": "boolean" } }
+        },
+        "health": {
+          "type": "object", "additionalProperties": false,
+          "properties": {
+            "livenessPath": { "type": "string", "pattern": "^/" },
+            "readinessPath": { "type": "string", "pattern": "^/" }
+          }
+        },
+        "autoscaling": {
+          "type": "object", "additionalProperties": false, "required": ["enabled"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "minReplicas": { "type": "integer", "minimum": 2 },
+            "maxReplicas": { "type": "integer", "maximum": 20 },
+            "targetCPUUtilization": { "type": "integer", "minimum": 1, "maximum": 100 }
+          }
+        }
+      }
+    }
+  }
+}

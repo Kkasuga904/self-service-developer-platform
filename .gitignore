@@ -1,0 +1,10 @@
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+terraform.tfvars
+platform
+platform.exe
+rendered.yaml
+rendered-hpa.yaml
+.DS_Store

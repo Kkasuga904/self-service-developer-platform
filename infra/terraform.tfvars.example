@@ -1,0 +1,12 @@
+aws_region         = "ap-northeast-1"
+name               = "developer-platform-dev"
+kubernetes_version = "1.35"
+node_instance_types = ["t3.medium"]
+
+# Replace with the operator's current public IP in CIDR notation before plan.
+cluster_public_access_cidrs = ["198.51.100.10/32"]
+
+# Enable only after configuring the repository and checking whether this AWS
+# account already has a GitHub OIDC provider.
+github_repository                  = "Kkasuga904/self-service-developer-platform"
+existing_github_oidc_provider_arn = ""
