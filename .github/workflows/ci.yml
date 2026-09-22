@@ -79,10 +79,13 @@ jobs:
       - run: kubeconform -strict -summary -kubernetes-version 1.35.0 rendered-payments.yaml rendered-orders.yaml rendered-hpa.yaml
       - run: kubectl kustomize gitops/platform >/dev/null
       - name: Validate observability manifests
+        # PrometheusRule is a monitoring CRD: even --dry-run=client asks the
+        # API server for discovery, so there is no cluster-free kubectl check.
+        # Rule content is asserted in Go (internal/guardrails, run in the go
+        # job); here we check JSON validity and kustomize rendering only.
         run: |
           kubectl kustomize gitops/platform >/dev/null
           python3 -c "import json; json.load(open('observability/dashboards/golden-path-overview.json'))"
-          kubectl apply --dry-run=client --validate=false -f observability/prometheus-rules.yaml
 
   policy:
     runs-on: ubuntu-24.04
