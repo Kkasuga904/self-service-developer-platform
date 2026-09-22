@@ -9,7 +9,7 @@ spec:
   resources:
     size: small
   availability:
-    replicas: 2
+    replicas: 3
   observability:
     enabled: true
   health:
