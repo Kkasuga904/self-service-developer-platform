@@ -31,6 +31,7 @@ module "github_oidc" {
 
   name                              = var.name
   github_repository                 = var.github_repository
+  github_oidc_subject               = var.github_oidc_subject
   eks_cluster_arn                   = module.eks.cluster_arn
   existing_github_oidc_provider_arn = var.existing_github_oidc_provider_arn
 }

@@ -10,3 +10,7 @@ cluster_public_access_cidrs = ["198.51.100.10/32"]
 # account already has a GitHub OIDC provider.
 github_repository                  = "Kkasuga904/self-service-developer-platform"
 existing_github_oidc_provider_arn = ""
+
+# Set this only when the GitHub organization/account uses a customized OIDC
+# subject template. Capture the non-secret `sub` claim from a validation run.
+github_oidc_subject = ""

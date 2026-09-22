@@ -13,6 +13,7 @@ resource "aws_iam_openid_connect_provider" "github" {
 
 locals {
   provider_arn = var.existing_github_oidc_provider_arn != "" ? var.existing_github_oidc_provider_arn : aws_iam_openid_connect_provider.github[0].arn
+  oidc_subject = var.github_oidc_subject != "" ? var.github_oidc_subject : "repo:${var.github_repository}:ref:refs/heads/main"
 }
 
 resource "aws_iam_role" "github" {
@@ -28,7 +29,7 @@ resource "aws_iam_role" "github" {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
         }
         StringLike = {
-          "token.actions.githubusercontent.com:sub" = "repo:${lower(var.github_repository)}:ref:refs/heads/main"
+          "token.actions.githubusercontent.com:sub" = local.oidc_subject
         }
       }
     }]

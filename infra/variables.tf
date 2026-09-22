@@ -55,3 +55,9 @@ variable "existing_github_oidc_provider_arn" {
   type        = string
   default     = ""
 }
+
+variable "github_oidc_subject" {
+  description = "Optional exact GitHub OIDC sub claim for accounts using a customized subject template. Empty uses the standard repository/main subject."
+  type        = string
+  default     = ""
+}
