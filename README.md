@@ -87,6 +87,15 @@ The strongest evidence is behavior, not technology count:
 - GitHub Actions OIDC positive/negative tests without long-lived AWS keys;
 - unexpected cloud integration incidents retained with diagnosis and fixes.
 
+Phase 4 then deliberately broke platform boundaries on a fresh EKS cluster:
+bad image and Argo-controller experiments were **PARTIAL** because normal Argo
+refresh exceeded expectations and needed hard refresh; Prometheus loss and
+team-boundary experiments **PASS**. In every measured application-serving
+window, 50/50 requests returned HTTP 200. These short samples demonstrate
+failure behavior, not production availability. Destroy passed; direct residual
+APIs were empty, while the tagging index retained a deleted-NAT tombstone, so
+the residual verdict remains PARTIAL.
+
 Exact commands, dates, qualifications, and PASS/PARTIAL/NOT RUN states live in
 [Validation](docs/VALIDATION.md). Unexpected implementation incidents are in
 [Incidents](docs/INCIDENTS.md); intentional failure injections are kept apart

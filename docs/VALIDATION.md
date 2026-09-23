@@ -547,3 +547,16 @@ returned 200; 5/5 Golden Path targets were UP; availability query returned 1.
 Detailed pre-written hypotheses, timestamps, SHAs, observations, recovery, and
 differences are in `docs/FAILURE_EXPERIMENTS.md`. The short samples are not
 production availability or recovery benchmarks.
+
+### Phase 4 destroy and final local validation
+
+- Destroy: **PASS**, plan `0/0/45`, apply `45 destroyed`, state count 0.
+- Residual check: **PARTIAL**. Every direct API category was empty (EKS,
+  EC2/ASG, VPC/subnet/NAT/EIP/ENI/SG/EBS, ECR, CloudWatch, IAM roles,
+  project-created OIDC, load balancers), but Resource Groups Tagging API still
+  returned the deleted NAT ARN after retries.
+- Final local validation: **PASS**. Go tests/vet, contracts, Terraform,
+  Helm, kubeconform (10/10), GitOps render, observability, Kyverno cases A–E,
+  shell syntax, Trivy source scan, Docker build, and container `/healthz` 200.
+- Cost: no billing total claimed; the EKS/two-node/NAT environment existed for
+  approximately 80 minutes.

@@ -66,10 +66,14 @@ made no mutation and required no repair.
 
 ## Platform Guarantees
 
-Supported by Phase 3 evidence: typed contract validation, standard secure
-workload rendering, layered Kyverno enforcement, GitOps drift reconciliation,
-team-scoped diagnostic RBAC, application metrics/SLI queries, short-lived OIDC,
-and disposable AWS teardown. Phase 4 guarantees must wait for execution.
+Supported by observed evidence: typed contract validation, standard secure
+workload rendering, layered Kyverno enforcement, managed-field GitOps drift
+reconciliation, team-scoped diagnostics, application metrics/SLI queries,
+short-lived OIDC, and disposable AWS teardown. During the bounded tests, a
+zero-unavailable rollout preserved three old replicas across a bad image,
+existing applications served while Argo was down, and applications served
+while Prometheus was down. These are bounded observations, not universal
+availability guarantees.
 
 ## Platform Non-Guarantees
 
@@ -81,8 +85,12 @@ compliance, multi-cluster/region resilience, or production scale.
 ## Unexpected Incidents
 
 The Phase 4 start found an expired `portfolio` AWS SSO session. No cloud
-mutation occurred before reauthentication. Earlier unplanned incidents remain
-preserved in INCIDENTS and VALIDATION, separate from intentional injections.
+mutation occurred before reauthentication. Docker Desktop initially failed on
+a stale local ingest socket, so the ECR bootstrap image was built with a
+temporary pinned Go builder; Docker recovered before final validation and the
+required Docker build passed. The Linux bash runtime did not share the Windows
+kubeconfig, so pinned bootstrap commands were run directly with Windows
+kubectl/Helm. Earlier incidents remain preserved separately.
 
 ## Changes Made
 
@@ -109,22 +117,36 @@ are documented only, not a proposed Phase 5.
 
 ## AWS Cost
 
-NOT MEASURED for Phase 4. Do not reuse Phase 3 duration as a Phase 4 charge.
-Record actual lifetime and available billing evidence after destroy; otherwise
-list the charged resource classes without inventing a total.
+No billing-console figure was available, so no currency total is claimed. The
+charged environment existed for approximately 80 minutes and consisted of one
+EKS control plane, two on-demand `t3.medium` nodes, one NAT Gateway/EIP, EBS,
+ECR and CloudWatch. It had no RDS, external LoadBalancer, GPU, mesh, or extra
+worker nodes. This short run is not a monthly cost benchmark.
 
 ## Destroy
 
-**NOT RUN** for Phase 4.
+**PASS.** Reviewed plan: `0 add / 0 change / 45 destroy`. Apply completed with
+45 destroyed and Terraform state count zero.
 
 ## Residual Resource Check
 
-**NOT RUN** for Phase 4.
+**PARTIAL.** Direct APIs returned empty for EKS, non-terminated EC2, ASG, VPC,
+subnets, NAT, EIP, ENI, SG, EBS, ECR, CloudWatch, project IAM roles, the
+project-created GitHub OIDC provider, and classic/v2 load balancers. The
+Resource Groups Tagging API continued to return the already-deleted NAT ARN
+after retries; the direct NAT API returned empty. This is recorded as a stale
+tag-index tombstone rather than promoted to PASS.
 
 ## Final Local Validation
 
-**NOT RUN** after Phase 4 destroy. Interim local results, if any, belong in
-VALIDATION and do not satisfy the required final post-destroy run.
+**PASS** after destroy: Go tests/vet (root and sample app), both Platform
+Contracts, Terraform fmt/init/validate, Helm lint/render, kubeconform 10/10,
+GitOps kustomize, observability JSON/structural tests, Kyverno cases A–E,
+policy fixtures, shell syntax, Trivy source scan (zero HIGH/CRITICAL), Docker
+build, and a real container `/healthz` HTTP 200. Saved `.tfplan` execution
+artifacts were explicitly skipped in the final source scan; an initial scan of
+the plan snapshot lost source ignore metadata and re-reported the intentionally
+restricted public EKS endpoint.
 
 ## Final portfolio review
 
