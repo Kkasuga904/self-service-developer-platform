@@ -290,7 +290,7 @@ are not reconstructed after recovery.
 
 ### Data plane impact
 
-NOT RUN; expected none.
+Observed none: payment-api stayed 3/3 and 50/50 health requests returned 200.
 
 ### Control plane impact
 
