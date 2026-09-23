@@ -528,3 +528,22 @@ verified via API + Prometheus data, not screenshot; init/ephemeral containers
 outside policy scope; ClusterPolicy deprecation noted with ValidatingPolicy
 migration as follow-up; no log aggregation (by design); namespace is not a hard
 security boundary (documented).
+
+## Phase 4 reliability validation (2026-09-23 JST)
+
+Fresh disposable environment: Terraform `45 add / 0 change / 0 destroy`, EKS
+1.35 ACTIVE, two nodes Ready, Argo/Kyverno/Prometheus bootstrapped, and baseline
+root/payments/orders Synced+Healthy at commit `46764c0`. Both health endpoints
+returned 200; 5/5 Golden Path targets were UP; availability query returned 1.
+
+| Area | Result |
+| --- | --- |
+| A — policy-valid bad image | PARTIAL: old 3 replicas preserved 50/50 HTTP 200; Argo refresh required manual hard refresh; Git fix recovered Healthy |
+| B — Argo controller loss | PARTIAL: application remained available; deploy/drift/status stopped; recovery required hard refresh; managed replica drift self-healed |
+| C — Prometheus/operator loss | PASS: app 50/50 HTTP 200 while queries/SLI unavailable; 5/5 targets and SLI returned after recovery |
+| D — team RBAC boundary | PASS: payments list/log/port-forward worked; orders deployment server-dry-run create was Forbidden |
+| Optional node maintenance | NOT RUN: intentionally omitted to avoid duplicating Kubernetes rescheduling mechanics |
+
+Detailed pre-written hypotheses, timestamps, SHAs, observations, recovery, and
+differences are in `docs/FAILURE_EXPERIMENTS.md`. The short samples are not
+production availability or recovery benchmarks.

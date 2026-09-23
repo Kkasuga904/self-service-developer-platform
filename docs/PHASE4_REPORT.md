@@ -1,10 +1,8 @@
 # Phase 4 final report
 
-This report is deliberately evidence-gated. Phase 4 implementation artifacts
-exist, but real AWS experiments remain **NOT RUN** until fresh output is added
-to [FAILURE_EXPERIMENTS.md](FAILURE_EXPERIMENTS.md). This file must not be
-rewritten as a success narrative merely because the expected behavior is
-plausible.
+This report is evidence-gated. The 2026-09-23 JST run is summarized here; exact
+timestamps, commands, SHAs, and observed states are in
+[FAILURE_EXPERIMENTS.md](FAILURE_EXPERIMENTS.md).
 
 ## Phase 4 Summary
 
@@ -18,11 +16,11 @@ optional and intentionally omitted unless it adds platform-level evidence.
 
 | Experiment | Result | Evidence |
 | --- | --- | --- |
-| A — bad deployment | NOT RUN | execution ledger incomplete |
-| B — Argo CD control plane | NOT RUN | execution ledger incomplete |
-| C — observability | NOT RUN | execution ledger incomplete |
-| D — team boundary | NOT RUN | execution ledger incomplete |
-| E — node maintenance | NOT RUN / optional | avoid duplicating Pod-rescheduling mechanics |
+| A — bad deployment | PARTIAL | runtime behavior/recovery observed; normal Git refresh exceeded expectation and required hard refresh |
+| B — Argo CD control plane | PARTIAL | data plane continuity proven; recovery needed hard refresh; arbitrary annotation not self-healed |
+| C — observability | PASS | application continuity and monitoring loss/recovery observed |
+| D — team boundary | PASS | positive diagnostics and real negative API action observed |
+| E — node maintenance | NOT RUN / optional | omitted to avoid duplicating Pod-rescheduling mechanics |
 
 ## Most Important Findings
 
@@ -38,13 +36,19 @@ optional and intentionally omitted unless it adds platform-level evidence.
 5. Monitoring loss creates unknown periods; restored Prometheus cannot recreate
    samples never collected.
 
-Items 1–5 are design findings until their corresponding experiment is marked
-PASS/PARTIAL/FAIL from observation.
+Items 1–5 were tested in the bounded short-lived run; they are not production
+benchmarks or long-term guarantees.
 
 ## Hypothesis vs Reality
 
-No comparison is yet supported. The hypotheses and required observations are
-written before injection in FAILURE_EXPERIMENTS. Preserve any mismatch.
+The zero-unavailable rollout preserved all three old replicas and 50/50 HTTP
+requests, as predicted. Contrary to expectation, normal Argo refresh did not
+observe the bad commit within six minutes and controller recovery did not
+reconcile pending state within three minutes; both needed hard refresh. Argo
+reported a bad applied revision as `Synced/Progressing`, not Degraded. An extra
+metadata annotation was not self-healed, while managed replicas were. Directly
+scaling Prometheus to zero was undone by its operator, requiring the reconciler
+to be paused for the experiment.
 
 ## Recovery
 
@@ -55,7 +59,10 @@ written before injection in FAILURE_EXPERIMENTS. Preserve any mismatch.
   queries, and dashboards.
 - D: no mutation should occur; verify the forbidden annotation is absent.
 
-These are procedures, not completed recovery evidence.
+All four recoveries were observed. A took ~170s from fix push to Healthy; B
+restored controller Ready quickly but took ~381s including the hard-refresh
+investigation; C restored Pods in ~24s and functional targets/SLI in ~76s; D
+made no mutation and required no repair.
 
 ## Platform Guarantees
 
@@ -87,8 +94,11 @@ preserved in INCIDENTS and VALIDATION, separate from intentional injections.
 
 ## Remaining Limitations
 
-Real experiment output, timestamps, traffic counts, recovery times, fresh cost,
-destroy, residual checks, and post-destroy local validation are still required.
+Argo automatic refresh scheduling needs further diagnosis; the run proves hard
+refresh recovery, not reliable detection within the configured 180s. Metrics
+during Prometheus downtime are permanently missing. Samples were short and
+traffic came through local port-forward. Fresh cost, destroy, residual checks,
+and post-destroy local validation are recorded below when complete.
 
 ## Future Production Extensions
 
@@ -165,4 +175,3 @@ Do not claim production operation experience, enterprise readiness,
 battle-testing, hostile multi-tenancy, automatic rollback, 30-day SLO
 compliance, many-team scale, or Phase 4 results until their evidence rows are
 filled from a fresh run.
-

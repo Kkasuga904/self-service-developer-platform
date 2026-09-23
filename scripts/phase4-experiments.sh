@@ -176,7 +176,7 @@ rbac() {
   local as=(--as=phase4-payments-user --as-group=platform-payments-developers)
   kubectl auth can-i get pods -n team-payments "${as[@]}" | grep -Fx yes
   kubectl auth can-i get pods/log -n team-payments "${as[@]}" | grep -Fx yes
-  kubectl auth can-i create pods/portforward -n team-payments "${as[@]}" | grep -Fx yes
+  kubectl auth can-i create pods --subresource=portforward -n team-payments "${as[@]}" | grep -Fx yes
   kubectl auth can-i get pods -n team-orders "${as[@]}" | grep -Fx no
   kubectl auth can-i patch deployments -n team-orders "${as[@]}" | grep -Fx no
   kubectl auth can-i create clusterroles "${as[@]}" | grep -Fx no

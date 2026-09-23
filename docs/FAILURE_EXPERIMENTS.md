@@ -39,7 +39,7 @@ SSO-session error. No AWS or Kubernetes mutation had occurred at that point.
 
 ## Required pre-experiment baseline
 
-Status: **NOT RUN**
+Status: **PASS** (2026-09-22 23:43Z)
 
 Command: `AWS_PROFILE=portfolio make phase4-baseline`
 
@@ -47,21 +47,21 @@ Required evidence:
 
 | Signal | Required state | Observed |
 | --- | --- | --- |
-| EKS | `ACTIVE`, expected version | NOT RUN |
-| Nodes | all `Ready` | NOT RUN |
-| Argo CD Applications | payments/orders `Synced`, `Healthy` | NOT RUN |
-| Workloads | payments 3/3, orders 2/2 Ready | NOT RUN |
-| Health endpoints | both HTTP 200 | NOT RUN |
-| Prometheus | Golden Path targets `up == 1`; SLI query evaluates | NOT RUN |
-| Kyverno | deployments available; policies ready | NOT RUN |
-| RBAC | payments read=yes, cross-team patch=no | NOT RUN |
-| Git revision | Application revision equals intended commit | NOT RUN |
+| EKS | `ACTIVE`, expected version | ACTIVE, 1.35 |
+| Nodes | all `Ready` | 2/2 Ready |
+| Argo CD Applications | payments/orders `Synced`, `Healthy` | root/payments/orders Synced + Healthy |
+| Workloads | payments 3/3, orders 2/2 Ready | 3/3 and 2/2 |
+| Health endpoints | both HTTP 200 | both `ok`, HTTP 200 |
+| Prometheus | Golden Path targets `up == 1`; SLI query evaluates | 5/5 UP; availability result 1 |
+| Kyverno | deployments available; policies ready | all 8 ClusterPolicies Ready |
+| RBAC | payments read=yes, cross-team patch=no | yes / no |
+| Git revision | Application revision equals intended commit | `46764c0` |
 
 No experiment may start until every row is healthy.
 
 ## Experiment A — policy-valid bad deployment
 
-Result: **NOT RUN**
+Result: **PARTIAL**
 
 ### Hypothesis
 
@@ -89,10 +89,13 @@ plane, platform controllers, policy, and monitoring should remain healthy.
 
 ### Observed behavior
 
-NOT RUN. Record commit acceptance, Application sync/health/revision,
-Deployment conditions, old/new ReplicaSets, Pod reason, relevant Events,
-Ready count, orders state, and `scripts/phase4-experiments.sh
-observe-bad-deploy` output.
+Bad commit `8dcc9e0` was pushed at 23:45:38Z and passed the contract and Helm
+checks. The Application did not automatically refresh within six minutes even
+though `timeout.reconciliation` was 180s; a hard refresh at 23:51:18Z advanced
+it to the bad SHA at 23:51:27Z. Argo showed `Synced/Progressing`. The Deployment
+showed 3 desired, 1 updated, 4 total, 3 available; old ReplicaSet was 3/3 and
+the surge ReplicaSet 0/1 Ready. The new Pod reported `ErrImagePull`, then
+`ImagePullBackOff`, with ECR digest-not-found Events. Orders remained healthy.
 
 ### Detection
 
@@ -116,8 +119,9 @@ health but does not infer that the previous Git revision should be restored.
 
 ### Data plane impact
 
-NOT RUN. Record HTTP success/failure counts over a fixed window and Ready Pod
-count; do not infer availability from a single request.
+The three old Pods remained Ready and behind the Service. A 50-request window
+returned 50 HTTP 200 / 0 failures. Prometheus showed the three old targets at
+`up=1`, the failed surge target at `up=0`, and available replicas=3.
 
 ### Control plane impact
 
@@ -132,13 +136,17 @@ Healthy timestamps.
 
 ### Recovery evidence
 
-NOT RUN. Required: reverted Git SHA, Argo revision/Synced/Healthy, Deployment
-3/3 available, failed ReplicaSet scaled down, Pods Ready, HTTP results, and
-restored baseline.
+Fix commit `77c4b18` was pushed at 23:53:28Z. Argo automatically observed it
+and returned `Synced/Healthy` at 23:56:18Z; recovery took about 170s. Deployment
+returned to 3/3 and the failed ReplicaSet was removed from serving.
 
 ### Difference from hypothesis
 
-NOT RUN.
+The availability hypothesis was correct, but automatic detection of the bad
+commit was not: a hard refresh was required after more than six minutes. Argo
+reported the applied bad manifest as `Synced/Progressing`, not Degraded. The
+experiment is PARTIAL rather than PASS because normal detection breached the
+configured 180s expectation.
 
 ### Improvement
 
@@ -149,7 +157,7 @@ would create drift while Git still requests the bad revision.
 
 ## Experiment B — Argo CD control-plane failure
 
-Result: **NOT RUN**
+Result: **PARTIAL**
 
 ### Hypothesis
 
@@ -174,9 +182,12 @@ manual drift remains unapplied/unhealed during the outage.
 
 ### Observed behavior
 
-NOT RUN. During the outage, record controller replicas, existing Pods and
-Services, fixed-window HTTP results, Prometheus scrape continuity, a harmless
-Git change or reversible annotation drift, and the unchanged/unhealed state.
+The application-controller was scaled 1→0 at 23:56:47Z. Payments stayed 3/3,
+Prometheus stayed Running, and 50/50 requests returned HTTP 200. Commit
+`07ae85c` was pushed at 23:57:32Z and a harmless Deployment annotation was
+added. Argo remained on old SHA `77c4b18`, displayed stale `Synced/Healthy`,
+and the annotation remained present: reconciliation and drift detection had
+stopped while the data plane continued.
 
 ### Detection
 
@@ -195,7 +206,8 @@ Kubernetes scheduling and already-created workload resources continue.
 
 ### Data plane impact
 
-NOT RUN. The key question must be answered from measured traffic, not design.
+No measured data-plane outage: 50 successes / 0 failures, 3 Ready replicas.
+**Argo CD failure did not equal application failure.**
 
 ### Control plane impact
 
@@ -210,11 +222,19 @@ Synced/Healthy. Then rerun the baseline.
 
 ### Recovery evidence
 
-NOT RUN.
+Controller Ready returned about 20s after scale-up. Automatic Git/drift pickup
+still had not happened after more than three minutes; a hard refresh at
+00:02:58Z advanced the Application to `07ae85c`. A managed replicas drift
+(3→2) was self-healed to spec=3 immediately after refresh and Ready returned
+3/3 by 00:04:35Z. Final cleanup commit `ae78f40` restored the original contact.
 
 ### Difference from hypothesis
 
-NOT RUN.
+The main hypothesis held for application traffic. Recovery was slower and less
+automatic than predicted. An arbitrary extra Deployment metadata annotation
+was not considered drift and was not removed; managed `.spec.replicas` was.
+The result is PARTIAL because controller readiness alone did not restore timely
+reconciliation without a hard refresh.
 
 ### Improvement
 
@@ -224,7 +244,7 @@ HA reduces probability; it does not place Argo in the application data path.
 
 ## Experiment C — observability failure
 
-Result: **NOT RUN**
+Result: **PASS**
 
 ### Hypothesis
 
@@ -244,9 +264,12 @@ admission, and Kubernetes scheduling should be unaffected.
 
 ### Observed behavior
 
-NOT RUN. Record application traffic and `/healthz`, Prometheus Pod/target/query
-failure, Grafana datasource/panel behavior, SLI query availability, rule
-evaluation, and what the developer can still see through Kubernetes/Argo.
+Directly scaling the Prometheus StatefulSet to zero was first self-healed by
+Prometheus Operator within about 34s. The effective injection therefore scaled
+the operator 1→0 and Prometheus 1→0 at 00:06:44Z. Prometheus Service endpoints
+were empty; queries and SLI calculation were unavailable. Grafana remained
+Ready but had no datasource data. Payments remained 3/3, Argo
+`Synced/Healthy`, and 50/50 health requests returned 200.
 
 ### Detection
 
@@ -282,11 +305,15 @@ and Grafana panels. Rerun baseline.
 
 ### Recovery evidence
 
-NOT RUN.
+Operator and Prometheus were restored at 00:09:10Z. Both were Ready at
+00:09:34Z (about 24s); by 00:10:27Z all 5 Golden Path targets were `up=1` and
+the availability query returned 1 (about 76s from recovery start).
 
 ### Difference from hypothesis
 
-NOT RUN.
+The application/monitoring separation matched the hypothesis. The additional
+finding was that Prometheus Operator protects the StatefulSet against a direct
+scale injection. Stopping Prometheus required pausing its reconciler too.
 
 ### Improvement
 
@@ -297,7 +324,7 @@ feature additions.
 
 ## Experiment D — team boundary / unauthorized action
 
-Result: **NOT RUN**
+Result: **PASS**
 
 ### Hypothesis
 
@@ -320,8 +347,12 @@ script exits immediately.
 
 ### Observed behavior
 
-NOT RUN. Record every `yes`/`no` and the API Forbidden response with identity,
-account identifiers, and tokens omitted.
+At 00:10:58Z, the payments identity returned yes for own Pod read/log and
+port-forward (`--subresource=portforward`), no for orders read/patch and
+clusterrole create. Real payments Pod list, log read, and port-forward
+`/healthz` HTTP 200 succeeded. A real server-dry-run create of an orders
+Deployment returned Forbidden (`cannot create deployments.apps`) and no object
+was created.
 
 ### Detection
 
@@ -353,11 +384,14 @@ path, and treat the authorization grant as a blocking defect.
 
 ### Recovery evidence
 
-NOT RUN.
+No recovery mutation was needed; the unauthorized Deployment and annotation
+were absent and workloads remained healthy.
 
 ### Difference from hypothesis
 
-NOT RUN.
+The RBAC hypothesis held. The shorthand `can-i create pods/portforward` gave a
+misleading `no`; the correct kubectl form is `create pods
+--subresource=portforward`, which returned `yes` and matched the real action.
 
 ### Improvement
 
@@ -382,8 +416,7 @@ counts. Short disposable-cluster samples are not production benchmarks.
 
 | Experiment | Injected | Detected | Recovery start | Healthy | Detect time | Recover time | HTTP success/fail | Ready before/during/after |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| A | NOT RUN | NOT RUN | NOT RUN | NOT RUN | n/a | n/a | n/a | n/a |
-| B | NOT RUN | NOT RUN | NOT RUN | NOT RUN | n/a | n/a | n/a | n/a |
-| C | NOT RUN | NOT RUN | NOT RUN | NOT RUN | n/a | n/a | n/a | n/a |
-| D | NOT RUN | NOT RUN | NOT RUN | NOT RUN | n/a | n/a | n/a | n/a |
-
+| A | 23:45:38Z | 23:51:27Z (hard refresh) | 23:53:28Z | 23:56:18Z | ~349s | ~170s | 50/0 | 3/3/3 |
+| B | 23:56:47Z | immediate controller absence | 23:58:53Z | 00:05:14Z | seconds | ~381s | 50/0 | 3/3/3 |
+| C | 00:06:44Z effective | immediate endpoint loss | 00:09:10Z | 00:10:27Z | seconds | ~76s | 50/0 | 3/3/3 |
+| D | 00:10:58Z | immediate Forbidden | n/a | 00:11:21Z | seconds | n/a | n/a | unchanged |
